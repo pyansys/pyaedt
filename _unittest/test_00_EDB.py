@@ -7,6 +7,7 @@ import time
 # Import required modules
 from pyaedt import Edb
 from pyaedt.edb_core.components import resistor_value_parser
+from pyaedt.edb_core.general import convert_net_list_to_py_list
 
 
 test_project_name = "Galileo_edb"
@@ -718,3 +719,44 @@ class TestClass(BasisTest, object):
         edb3 = Edb(dxf_path, edbversion=desktop_version)
         edb3.close_edb()
         del edb3
+
+    def test_82_place_at_origin(self):
+        laminateEdb = Edb(os.path.join(local_path, "example_models", "lam_for_bottom_place.aedb"), edbversion=desktop_version)
+        chipEdb = self.add_edb('chip')
+        try:
+            layout = laminateEdb.active_layout
+            cellInstances = list(layout.CellInstances)
+            assert len(cellInstances) == 0
+            assert chipEdb.core_stackup.place_in_layout_3d_placement(
+                laminateEdb,
+                angle=0.0,
+                offset_x=0.0,
+                offset_y=0.0,
+                flipped_stackup=False,
+                place_on_top=True
+            )
+            assert 'lam_two_stage' in chipEdb.cell_names
+            merged_cell = chipEdb.edb.Cell.Cell.FindByName(chipEdb.db, chipEdb.edb.Cell.CellType.CircuitCell, 'lam_two_stage')
+            assert not merged_cell.IsNull()
+            layout = merged_cell.GetLayout()
+            cellInstances = list(layout.CellInstances)
+            assert len(cellInstances) == 1
+            cellInstance = cellInstances[0]
+            assert cellInstance.Is3DPlacement()
+            if is_ironpython:
+                res, localOrigin, rotAxisFrom, rotAxisTo, angle, loc = cellInstance.Get3DTransformation()
+            else:
+                res, localOrigin, rotAxisFrom, rotAxisTo, angle, loc = cellInstance.Get3DTransformation(None, None, None, None, None)
+            assert res
+            zeroValue = chipEdb.edb_value(0)
+            oneValue = chipEdb.edb_value(1)
+            originPoint = chipEdb.edb.Geometry.Point3DData(zeroValue, zeroValue, zeroValue)
+            xAxisPoint = chipEdb.edb.Geometry.Point3DData(oneValue, zeroValue, zeroValue)
+            assert localOrigin.IsEqual(originPoint)
+            assert rotAxisFrom.IsEqual(xAxisPoint)
+            assert rotAxisTo.IsEqual(xAxisPoint)
+            assert angle.IsEqual(zeroValue)
+            assert loc.IsEqual(chipEdb.edb.Geometry.Point3DData(zeroValue, zeroValue, chipEdb.edb_value(170e-6)))
+        finally:
+            chipEdb.close_edb()
+            laminateEdb.close_edb()
