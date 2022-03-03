@@ -618,8 +618,10 @@ class EdbStackup(object):
                 cloned_via_layer.SetLowerElevation(self._edb_value(via_layer_lower_elevation))
                 new_lc.AddStackupLayerAtElevation(cloned_via_layer)
 
-            layer_list = convert_py_list_to_net_list(non_stackup_layers)
-            new_lc.AddLayers(layer_list)
+            if len(non_stackup_layers) > 0:
+                layer_list = convert_py_list_to_net_list(non_stackup_layers)
+                new_lc.AddLayers(layer_list)
+
             if not self._active_layout.SetLayerCollection(new_lc):
                 self._logger.error("Failed to Flip Stackup.")
                 return False

@@ -760,3 +760,31 @@ class TestClass(BasisTest, object):
         finally:
             chipEdb.close_edb()
             laminateEdb.close_edb()
+
+    def test_83_flip_design_for_host(self):
+        laminateEdb = Edb(os.path.join(local_path, "example_models", "lam_for_bottom_place.aedb"), edbversion=desktop_version)
+        try:
+            layout = laminateEdb.active_layout
+            layerCollection = layout.GetLayerCollection()
+            layer = laminateEdb.edb.Cell.Layer.FindByName(layerCollection, 'L1')
+            layoutInstance = layout.GetLayoutInstance()
+            point = laminateEdb.edb.Geometry.PointData(
+                laminateEdb.edb_value(0.6e-3),
+                laminateEdb.edb_value(0.5e-3)
+            )
+            primitives = [
+                loi for loi in layoutInstance.FindLayoutObjInstance(point, layer, None).Items
+                if loi.GetLayoutObj().GetObjType() == laminateEdb.edb.Cell.LayoutObjType.Primitive
+            ]
+            assert len(primitives) == 0
+            assert laminateEdb.core_stackup.flip_design()
+            layerCollection = layout.GetLayerCollection()
+            layer = laminateEdb.edb.Cell.Layer.FindByName(layerCollection, 'L1')
+            layoutInstance = layout.GetLayoutInstance()
+            primitives = [
+                loi for loi in layoutInstance.FindLayoutObjInstance(point, layer, None).Items
+                if loi.GetLayoutObj().GetObjType() == laminateEdb.edb.Cell.LayoutObjType.Primitive
+            ]
+            assert len(primitives) == 1
+        finally:
+            laminateEdb.close_edb()
