@@ -288,46 +288,95 @@ class Hfss(FieldAnalysis3D, object):
         return result
 
     @pyaedt_function_handler()
-    def _create_lumped_driven(self, objectname, int_line_start, int_line_stop, impedance, portname, renorm, deemb):
-        start = [str(i) + self.modeler.model_units for i in int_line_start]
-        stop = [str(i) + self.modeler.model_units for i in int_line_stop]
+    def _create_lumped_driven(
+        self,
+        objectname,
+        int_line_start,
+        int_line_stop,
+        impedance=50.0,
+        portname="",
+        renorm=True,
+        deemb=False,
+        edge=False,
+    ):
+        if int_line_start and int_line_stop:
+            start = [str(i) + self.modeler.model_units for i in int_line_start]
+            stop = [str(i) + self.modeler.model_units for i in int_line_stop]
         props = OrderedDict({})
         if isinstance(objectname, str):
             props["Objects"] = [objectname]
         else:
-            props["Faces"] = [objectname]
+            if not edge:
+                props["Faces"] = [objectname]
+            else:
+                props["Edges"] = objectname
         props["DoDeembed"] = deemb
         props["RenormalizeAllTerminals"] = renorm
-        props["Modes"] = OrderedDict(
-            {
-                "Mode1": OrderedDict(
-                    {
-                        "ModeNum": 1,
-                        "UseIntLine": True,
-                        "IntLine": OrderedDict({"Start": start, "End": stop}),
-                        "AlignmentGroup": 0,
-                        "CharImp": "Zpi",
-                        "RenormImp": str(impedance) + "ohm",
-                    }
-                )
-            }
-        )
+        if not edge:
+            props["Modes"] = OrderedDict(
+                {
+                    "Mode1": OrderedDict(
+                        {
+                            "ModeNum": 1,
+                            "UseIntLine": True,
+                            "IntLine": OrderedDict({"Start": start, "End": stop}),
+                            "AlignmentGroup": 0,
+                            "CharImp": "Zpi",
+                            "RenormImp": str(impedance) + "ohm",
+                        }
+                    )
+                }
+            )
+        else:
+            props["Modes"] = OrderedDict(
+                {
+                    "Mode1": OrderedDict(
+                        {
+                            "ModeNum": 1,
+                            "RenormImp": str(impedance) + "ohm",
+                        }
+                    )
+                }
+            )
         props["ShowReporterFilter"] = False
         props["ReporterFilter"] = [True]
         props["Impedance"] = str(impedance) + "ohm"
         return self._create_boundary(portname, props, "LumpedPort")
 
     @pyaedt_function_handler()
-    def _create_port_terminal(self, objectname, int_line_stop, portname, renorm=True, deembed=None, iswaveport=False):
+    def _create_port_terminal(
+        self,
+        objectname,
+        int_line_stop=None,
+        portname="",
+        renorm=True,
+        deembed=None,
+        iswaveport=False,
+        impedance=50.0,
+        edge=False,
+    ):
         ref_conductors = self.modeler.convert_to_selections(int_line_stop, True)
         props = OrderedDict({})
-        props["Faces"] = int(objectname)
-        props["IsWavePort"] = iswaveport
-        props["ReferenceConductors"] = ref_conductors
-        props["RenormalizeModes"] = True
-        ports = list(self.oboundary.GetExcitationsOfType("Terminal"))
-        boundary = self._create_boundary(portname, props, "AutoIdentify")
-        if boundary:
+        if not edge:
+            props["Faces"] = int(objectname)
+            props["IsWavePort"] = iswaveport
+            props["ReferenceConductors"] = ref_conductors
+            props["RenormalizeModes"] = True
+            # props["Impedance"] = str(impedance) + "ohm"
+            ports = list(self.oboundary.GetExcitationsOfType("Terminal"))
+            boundary = self._create_boundary(portname, props, "AutoIdentify")
+        else:
+            props["Edges"] = objectname
+            if deembed is None or False:
+                props["DoDeembed"] = False
+            else:
+                props["DoDeembed"] = True
+            props["RenormalizeAllTerminals"] = renorm
+            props["ShowReporterFilter"] = False
+            props["Impedance"] = str(impedance) + "ohm"
+            boundary = self._create_boundary(portname, props, "LumpedPort")
+
+        if boundary and not edge:
             new_ports = list(self.oboundary.GetExcitationsOfType("Terminal"))
             terminals = [i for i in new_ports if i not in ports]
             id = 1
@@ -1541,7 +1590,15 @@ class Hfss(FieldAnalysis3D, object):
 
     @pyaedt_function_handler()
     def create_lumped_port_between_objects(
-        self, startobj, endobject, axisdir=0, impedance=50, portname=None, renorm=True, deemb=False, port_on_plane=True
+        self,
+        startobj,
+        endobject,
+        axisdir=0,
+        impedance=50.0,
+        portname=None,
+        renorm=True,
+        deemb=False,
+        port_on_plane=True,
     ):
         """Create a lumped port taking the closest edges of two objects.
 
@@ -2064,7 +2121,7 @@ class Hfss(FieldAnalysis3D, object):
                 else:
                     deembed = deembed_dist
                 return self._create_port_terminal(
-                    faces[0], endobject, portname, renorm=renorm, deembed=deembed, iswaveport=True
+                    faces[0], endobject, portname, renorm=renorm, deembed=deembed, iswaveport=True, impedance=50.0
                 )
         return False  # pragma: no cover
 
@@ -2518,7 +2575,7 @@ class Hfss(FieldAnalysis3D, object):
                 else:
                     deembed = deembed_dist
                 return self._create_port_terminal(
-                    faces[0], endobject, portname, renorm=renorm, deembed=deembed, iswaveport=True
+                    faces[0], endobject, portname, renorm=renorm, deembed=deembed, iswaveport=True, impedance=impedance
                 )
         return False
 
@@ -3103,7 +3160,13 @@ class Hfss(FieldAnalysis3D, object):
                 else:
                     deembed = deemb
                 return self._create_port_terminal(
-                    faces, terminal_references, portname, renorm=renorm, deembed=deembed, iswaveport=True
+                    faces,
+                    terminal_references,
+                    portname,
+                    renorm=renorm,
+                    deembed=deembed,
+                    iswaveport=True,
+                    impedance=impedance,
                 )
             else:
                 self.logger.error("Reference conductors are missing.")
@@ -3186,7 +3249,13 @@ class Hfss(FieldAnalysis3D, object):
                 else:
                     deembed = None
                 port = self._create_port_terminal(
-                    faces, reference_object_list, portname, renorm=renorm, deembed=deembed, iswaveport=False
+                    faces,
+                    reference_object_list,
+                    portname,
+                    renorm=renorm,
+                    deembed=deembed,
+                    iswaveport=False,
+                    impedance=impedance,
                 )
 
             return port
@@ -3594,6 +3663,93 @@ class Hfss(FieldAnalysis3D, object):
         return self._create_circuit_port(
             edge_list, port_impedance, port_name, renormalize, deembed, renorm_impedance=renorm_impedance
         )
+
+    @pyaedt_function_handler()
+    def create_lumped_port_from_edges(
+        self,
+        edge_signal,
+        edge_gnd,
+        port_name="",
+        port_impedance="50",
+        renormalize=False,
+        renorm_impedance="50",
+        deembed=False,
+    ):
+        """Create a Lumped port from two edges.
+
+        The integration line is from edge gnd to edge signal.
+
+        Parameters
+        ----------
+        edge_signal : int
+            Edge ID of the signal.
+        edge_gnd : int
+            Edge ID of the ground.
+        port_name : str, optional
+            Name of the port. The default is ``""``.
+        port_impedance : int, str, or float, optional
+            Impedance. The default is ``"50"``. You can also
+            enter a string that looks like this: ``"50+1i*55"``.
+        renormalize : bool, optional
+            Whether to renormalize the mode. The default is ``False``.
+            This parameter is ignored for a driven terminal.
+        renorm_impedance :  str, optional
+            Impedance. The default is ``50``.
+        deembed : bool, optional
+            Whether to deembed the port. The default is ``False``.
+
+        Returns
+        -------
+        :class:`pyaedt.modules.Boundary.BoundaryObject`
+            Boundary object.
+
+        References
+        ----------
+
+        >>> oModule.AssignLumpedPort
+
+        Examples
+        --------
+
+        Create two rectangles in the XY plane.
+        Select the first edge of each rectangle created previously.
+        Create a lumped port from the first edge of the first rectangle
+        toward the first edge of the second rectangle.
+
+        >>> plane = hfss.PLANE.XY
+        >>> rectangle1 = hfss.modeler.create_rectangle(plane, [10, 10, 10], [10, 10],
+        ...                                            name="rectangle1_for_port")
+        >>> edges1 = hfss.modeler.get_object_edges(rectangle1.id)
+        >>> first_edge = edges1[0]
+        >>> rectangle2 = hfss.modeler.create_rectangle(plane, [30, 10, 10], [10, 10],
+        ...                                            name="rectangle2_for_port")
+        >>> edges2 = hfss.modeler.get_object_edges(rectangle2.id)
+        >>> second_edge = edges2[0]
+        >>> hfss.solution_type = "Modal"
+        >>> hfss.create_lumped_port_from_edges(first_edge, second_edge, port_name="PortExample",
+        ...                                     port_impedance=50.1, renormalize=False,
+        ...                                     renorm_impedance="50")
+        'PortExample'
+
+        """
+
+        edge_list = [edge_signal, edge_gnd]
+        port_name = self._get_unique_source_name(port_name, "Port")
+
+        if "Modal" in self.solution_type:
+
+            return self._create_lumped_driven(
+                edge_list, None, None, port_impedance, port_name, renorm_impedance, deembed, True
+            )
+        else:
+            return self._create_port_terminal(
+                objectname=edge_list,
+                portname=port_name,
+                renorm=renormalize,
+                deembed=deembed,
+                edge=True,
+                impedance=port_impedance,
+            )
 
     @pyaedt_function_handler()
     def edit_source(self, portandmode, powerin, phase="0deg"):

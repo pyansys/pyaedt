@@ -333,7 +333,7 @@ class TestClass(BasisTest, object):
     def test_07_set_power(self):
         assert self.aedtapp.edit_source("sheet1_Port" + ":1", "10W")
 
-    def test_08_create_circuit_port_from_edges(self):
+    def test_08a_create_circuit_port_from_edges(self):
         plane = self.aedtapp.PLANE.XY
         rect_1 = self.aedtapp.modeler.create_rectangle(plane, [10, 10, 10], [10, 10], name="rect1_for_port")
         edges1 = self.aedtapp.modeler.get_object_edges(rect_1.id)
@@ -377,6 +377,51 @@ class TestClass(BasisTest, object):
         )
         assert bound
         bound.name = "port21"
+        assert bound.update()
+        self.aedtapp.solution_type = "Modal"
+
+    def test_08b_create_lumped_port_from_edges(self):
+        plane = self.aedtapp.PLANE.XY
+        rect_1 = self.aedtapp.modeler.create_rectangle(plane, [50, 50, 10], [10, 10], name="rect3_for_port")
+        edges1 = self.aedtapp.modeler.get_object_edges(rect_1.id)
+        e1 = edges1[1]
+        rect_2 = self.aedtapp.modeler.create_rectangle(plane, [80, 50, 10], [10, 10], name="rect4_for_port")
+        edges2 = self.aedtapp.modeler.get_object_edges(rect_2.id)
+        e2 = edges2[3]
+
+        self.aedtapp.solution_type = "Modal"
+
+        assert (
+            self.aedtapp.create_lumped_port_from_edges(
+                e1, e2, port_name="port100", port_impedance=50.1, renormalize=False, renorm_impedance="50"
+            ).name
+            == "port100"
+        )
+        assert (
+            self.aedtapp.create_lumped_port_from_edges(
+                e1,
+                e2,
+                port_name="port110",
+                port_impedance="50+1i*55",
+                renormalize=True,
+                renorm_impedance=15.4,
+                deembed=True,
+            ).name
+            == "port110"
+        )
+
+        self.aedtapp.solution_type = "Terminal"
+        assert (
+            self.aedtapp.create_lumped_port_from_edges(
+                e1, e2, port_name="port200", port_impedance=50.1, renormalize=False, renorm_impedance="50+1i*55"
+            ).name
+            == "port200"
+        )
+        bound = self.aedtapp.create_lumped_port_from_edges(
+            e1, e2, port_name="port320", port_impedance="50.1", renormalize=True, deembed=True
+        )
+        assert bound
+        bound.name = "port321"
         assert bound.update()
         self.aedtapp.solution_type = "Modal"
 
@@ -773,7 +818,7 @@ class TestClass(BasisTest, object):
         )
         assert port2.name + "_T1" in self.aedtapp.excitations
         port3 = self.aedtapp.create_lumped_port_between_objects(
-            box1, box2.name, self.aedtapp.AxisDir.XNeg, 50, "Lump3", True, True
+            box1, box2.name, self.aedtapp.AxisDir.XNeg, 55, "Lump3", True, True
         )
         assert port3.name + "_T1" in self.aedtapp.excitations
 
