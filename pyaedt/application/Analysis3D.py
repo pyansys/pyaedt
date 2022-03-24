@@ -422,7 +422,10 @@ class FieldAnalysis3D(Analysis, object):
            Use :func:`pyaedt.application.Analysis3D.modeler.export_3d_model` instead.
 
         """
-        warnings.warn("`export3DModel` is deprecated. Use `export_3d_model` instead.", DeprecationWarning)
+        warnings.warn(
+            "`export3DModel` is deprecated and will be removed from v0.5.0. Use `export_3d_model` instead.",
+            DeprecationWarning,
+        )
         return self.export_3d_model(fileName, filePath, fileFormat, object_list, removed_objects)
 
     @pyaedt_function_handler()

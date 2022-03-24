@@ -464,49 +464,6 @@ class Hfss(FieldAnalysis3D, object):
         return self._create_boundary(portname, props, "WavePort")
 
     @pyaedt_function_handler()
-    def assigncoating(
-        self,
-        obj,
-        mat=None,
-        cond=58000000,
-        perm=1,
-        usethickness=False,
-        thickness="0.1mm",
-        roughness="0um",
-        isinfgnd=False,
-        istwoside=False,
-        isInternal=True,
-        issheelElement=False,
-        usehuray=False,
-        radius="0.5um",
-        ratio="2.9",
-    ):
-        """Assign finite conductivity to one or more objects of a given material.
-
-        .. deprecated:: 0.4.5
-           Use :func:`Hfss.assign_coating` instead.
-
-        """
-
-        warnings.warn("`assigncoating` is deprecated. Use `assign_coating` instead.", DeprecationWarning)
-        self.assign_coating(
-            obj,
-            mat,
-            cond,
-            perm,
-            usethickness,
-            thickness,
-            roughness,
-            isinfgnd,
-            istwoside,
-            isInternal,
-            issheelElement,
-            usehuray,
-            radius,
-            ratio,
-        )
-
-    @pyaedt_function_handler()
     def assign_coating(
         self,
         obj,
@@ -2651,17 +2608,6 @@ class Hfss(FieldAnalysis3D, object):
         return None
 
     @pyaedt_function_handler()
-    def SARSetup(self, Tissue_object_List_ID, TissueMass=1, MaterialDensity=1, voxel_size=1, Average_SAR_method=0):
-        """Define SAR settings.
-
-        .. deprecated:: 0.4.5
-           Use :func:`Hfss.sar_setup` instead.
-
-        """
-        warnings.warn("`SARSetup` is deprecated. Use `sar_setup` instead.", DeprecationWarning)
-        self.sar_setup(Tissue_object_List_ID, TissueMass, MaterialDensity, voxel_size, Average_SAR_method)
-
-    @pyaedt_function_handler()
     def sar_setup(self, Tissue_object_List_ID, TissueMass=1, MaterialDensity=1, voxel_size=1, Average_SAR_method=0):
         """Define SAR settings.
 
@@ -3191,21 +3137,6 @@ class Hfss(FieldAnalysis3D, object):
 
             return port
         return False
-
-    @pyaedt_function_handler()
-    def assig_voltage_source_to_sheet(self, sheet_name, axisdir=0, sourcename=None):
-        """Create a voltage source taking one sheet.
-
-        .. deprecated:: 0.4.0
-           Use :func:`Hfss.assign_voltage_source_to_sheet` instead.
-
-        """
-
-        warnings.warn(
-            "`assig_voltage_source_to_sheet` is deprecated. Use `assign_voltage_source_to_sheet` instead.",
-            DeprecationWarning,
-        )
-        self.assign_voltage_source_to_sheet(sheet_name, axisdir, sourcename)
 
     @pyaedt_function_handler()
     def assign_voltage_source_to_sheet(self, sheet_name, axisdir=0, sourcename=None):

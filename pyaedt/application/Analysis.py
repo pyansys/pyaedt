@@ -221,7 +221,7 @@ class Analysis(Design, object):
     def CoordinateSystemAxis(self):
         """Coordinate system axis constant.
 
-        .. deprecated:: 0.4.8
+        .. deprecated:: 0.5.0
            Use :attr:`AXIS` instead.
 
         Returns
@@ -230,13 +230,17 @@ class Analysis(Design, object):
             Coordinate system axis constants tuple (.X, .Y, .Z).
 
         """
+        warnings.warn(
+            "`CoordinateSystemAxis` is deprecated and will be removed from v0.5.0. Use `AXIS` instead.",
+            DeprecationWarning,
+        )
         return CoordinateSystemAxis()
 
     @property
     def CoordinateSystemPlane(self):
         """Coordinate system plane constants.
 
-        .. deprecated:: 0.4.8
+        .. deprecated:: 0.5.0
            Use :attr:`PLANE` instead.
 
         Returns
@@ -245,13 +249,17 @@ class Analysis(Design, object):
             Coordinate system plane constants tuple (.XY, .YZ, .XZ).
 
         """
+        warnings.warn(
+            "`CoordinateSystemPlane` is deprecated and will be removed from v0.5.0. Use `PLANE` instead.",
+            DeprecationWarning,
+        )
         return CoordinateSystemPlane()
 
     @property
     def View(self):
         """Planes.
 
-        .. deprecated:: 0.4.8
+        .. deprecated:: 0.5.0
            Use :attr:`VIEW` instead.
 
         Returns
@@ -260,13 +268,17 @@ class Analysis(Design, object):
             Coordinate system plane string tuple ("XY", "YZ", "XZ").
 
         """
+        warnings.warn(
+            "`View` is deprecated and will be removed from v0.5.0. Use `PLANE` instead.",
+            DeprecationWarning,
+        )
         return Plane()
 
     @property
     def GravityDirection(self):
         """Gravity direction.
 
-        .. deprecated:: 0.4.8
+        .. deprecated:: 0.5.0
            Use :attr:`GRAVITY` instead.
         Returns
         -------
@@ -274,6 +286,10 @@ class Analysis(Design, object):
             Gravity direction tuple (XNeg, YNeg, ZNeg, XPos, YPos, ZPos).
 
         """
+        warnings.warn(
+            "`GravityDirection` is deprecated and will be removed from v0.5.0. Use `GRAVITY` instead.",
+            DeprecationWarning,
+        )
         return GravityDirection()
 
     @property
@@ -500,7 +516,7 @@ class Analysis(Design, object):
     def get_excitations_name(self):
         """Get all excitation names.
 
-        .. deprecated:: 0.4.27
+        .. deprecated:: 0.5.0
            Use :func:`excitations` property instead.
 
         Returns
@@ -514,7 +530,10 @@ class Analysis(Design, object):
 
         >>> oModule.GetExcitations
         """
-        warnings.warn("`get_excitations_name` is deprecated. Use `excitations` property instead.", DeprecationWarning)
+        warnings.warn(
+            "`get_excitations_name` is deprecated and will be removed from v0.5.0. Use `excitations` property instead.",
+            DeprecationWarning,
+        )
         return self.excitations
 
     @pyaedt_function_handler()

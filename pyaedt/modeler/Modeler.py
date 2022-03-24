@@ -975,7 +975,10 @@ class GeometryModeler(Modeler, object):
             List of object names.
 
         """
-        warnings.warn("`_convert_list_to_ids` is deprecated. Use `convert_to_selections` instead.", DeprecationWarning)
+        warnings.warn(
+            "`_convert_list_to_ids` is deprecated and will be removed in v0.5.0. Use `convert_to_selections` instead.",
+            DeprecationWarning,
+        )
 
         output_list = []
         if type(input_list) is not list:

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import warnings
+
 from pyaedt.generic.constants import AEDT_UNITS
 from pyaedt.generic.general_methods import _retry_ntimes
 from pyaedt.generic.general_methods import pyaedt_function_handler
@@ -151,13 +153,17 @@ class ModelerNexxim(ModelerCircuit):
     def components(self):
         """Schematic Component.
 
-        .. deprecated:: 0.4.13
+        .. deprecated:: 0.5.0
            Use :func:`Circuit.modeler.schematic` instead.
 
         Returns
         -------
         :class:`pyaedt.modeler.PrimitivesNexxim.NexximComponents`
         """
+        warnings.warn(
+            "`components` is deprecated and will be removed from v0.5.0. Use `schematic` instead.",
+            DeprecationWarning,
+        )
         return self._schematic
 
     @property
@@ -202,7 +208,7 @@ class ModelerNexxim(ModelerCircuit):
     def primitives(self):
         """Primitives.
 
-        .. deprecated:: 0.4.13
+        .. deprecated:: 0.5.0
            Use :func:`Circuit.modeler.layout` instead.
 
         Returns
@@ -210,6 +216,10 @@ class ModelerNexxim(ModelerCircuit):
         :class:`pyaedt.modeler.Primitives3DLayout.Primitives3DLayout`
 
         """
+        warnings.warn(
+            "`primitives` is deprecated and will be removed from v0.5.0. Use `layout` instead.",
+            DeprecationWarning,
+        )
         return self._primitives
 
     @model_units.setter
@@ -332,10 +342,14 @@ class ModelerTwinBuilder(ModelerCircuit):
     @property
     def components(self):
         """
-        .. deprecated:: 0.4.13
+        .. deprecated:: 0.5.0
            Use :func:`TwinBuilder.modeler.schematic` instead.
 
         """
+        warnings.warn(
+            "`primitives` is deprecated and will be removed from v0.5.0. Use `schematic` instead.",
+            DeprecationWarning,
+        )
         return self._components
 
     @property

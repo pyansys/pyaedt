@@ -129,7 +129,7 @@ class FieldAnalysisCircuit(Analysis):
     def get_excitations_name(self):
         """Excitation names.
 
-        .. deprecated:: 0.4.27
+        .. deprecated:: 0.5.0
            Use :func:`excitations` property instead.
 
         Returns
@@ -142,7 +142,10 @@ class FieldAnalysisCircuit(Analysis):
 
         >>> oEditor.GetAllPorts
         """
-        warnings.warn("`get_excitations_name` is deprecated. Use `excitations` property instead.", DeprecationWarning)
+        warnings.warn(
+            "`get_excitations_name` is deprecated and will be removed from v0.5.0. Use `excitations` property instead.",
+            DeprecationWarning,
+        )
         return self.excitations
 
     @property
