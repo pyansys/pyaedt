@@ -1,6 +1,6 @@
 """
-Manage Touchstone Objects
---------------------------
+General: Touchstone File Management
+-----------------------------------
 This example shows how to use Touchstone objects without opening AEDT.
 
 To provide the advanced postprocessing features needed for this example, Matplotlib and NumPy

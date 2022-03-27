@@ -29,7 +29,6 @@ information to AEDB files.
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
    components.Components
@@ -63,13 +62,14 @@ Those classes are the container of Data read from edb file.
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
    EDB_Data.EDBLayer
    EDB_Data.EDBLayers
    EDB_Data.EDBPadProperties
    EDB_Data.EDBPadstack
-   EDB_Data.EDBPinInstances
+   EDB_Data.EDBPadstackInstance
    EDB_Data.EDBComponent
+   EDB_Data.EDBNetsData
+   EDB_Data.EDBPrimitives
    siwave.SiwaveDCSetupTemplate

@@ -1,10 +1,20 @@
+import os
 import sys
 import warnings
 
-from pyaedt.generic.general_methods import aedt_exception_handler, is_ironpython
-from pyaedt.modeler.Object3d import Padstack, Components3DLayout, Geometries3DLayout, Pins3DLayout, Nets3DLayout, _uname
-from pyaedt.modeler.Primitives import default_materials
+from pyaedt.generic.general_methods import _retry_ntimes
+from pyaedt.generic.general_methods import is_ironpython
+from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.modeler.GeometryOperators import GeometryOperators
+from pyaedt.modeler.Object3d import _uname
+from pyaedt.modeler.Object3d import Components3DLayout
+from pyaedt.modeler.Object3d import ComponentsSubCircuit3DLayout
+from pyaedt.modeler.Object3d import Geometries3DLayout
+from pyaedt.modeler.Object3d import Nets3DLayout
+from pyaedt.modeler.Object3d import Padstack
+from pyaedt.modeler.Object3d import Pins3DLayout
+from pyaedt.modeler.Primitives import default_materials
+
 # import pkgutil
 # modules = [tup[1] for tup in pkgutil.iter_modules()]
 # if "clr" in modules or is_ironpython:
@@ -13,14 +23,15 @@ try:
     from System import String
     import System
 except ImportError:
-    warnings.warn("Pythonnet has to be installed to run Pyaedt")
+    if os.name != "posix":
+        warnings.warn("Pythonnet has to be installed to run Pyaedt")
 
 
 class Primitives3DLayout(object):
     """Manages primitives in HFSS 3D Layout.
 
     This class is inherited in the caller application and is accessible through the primitives variable part
-    of modeler object( eg. ``hfss3dlayout.modeler.primitives``).
+    of modeler object( eg. ``hfss3dlayout.modeler``).
 
     Parameters
     ----------
@@ -33,10 +44,10 @@ class Primitives3DLayout(object):
 
     >>> from pyaedt import Hfss3dLayout
     >>> aedtapp = Hfss3dLayout()
-    >>> prim = aedtapp.modeler.primitives
+    >>> prim = aedtapp.modeler
     """
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __getitem__(self, partname):
         """Retrieve a part.
 
@@ -56,18 +67,21 @@ class Primitives3DLayout(object):
                 return self.geometries[el]
         return None
 
-    def __init__(self, modeler):
+    def __init__(self, app):
         self.is_outside_desktop = sys.modules["__main__"].isoutsideDesktop
-        self._modeler = modeler
-        self._app = self._modeler._app
-        self._oeditor = self.modeler.oeditor
+        self._app = app
         self._opadstackmanager = self._app._oproject.GetDefinitionManager().GetManager("Padstack")
         self.padstacks = {}
         self._components = {}
+        self._components3d = {}
         self._geometries = {}
         self._pins = {}
         self._nets = {}
         pass
+
+    @property
+    def _modeler(self):
+        return self._app.modeler
 
     @property
     def opadstackmanager(self):
@@ -90,12 +104,14 @@ class Primitives3DLayout(object):
             List of components from EDB. If EDB is not present, ``None`` is returned.
 
         """
+        if not self._app.project_timestamp_changed and self._components:
+            return self._components
         try:
             comps = list(self.modeler.edb.core_components.components.keys())
         except:
             comps = []
         for el in comps:
-            self._components[el] = Components3DLayout(self, el)
+            self._components[el] = Components3DLayout(self, el, self.modeler.edb.core_components.components[el])
         return self._components
 
     @property
@@ -108,13 +124,14 @@ class Primitives3DLayout(object):
             List of geometries from EDB. If EDB is not present, ``None`` is returned.
 
         """
-
+        if not self._app.project_timestamp_changed and self._geometries:
+            return self._geometries
         try:
             prims = self.modeler.edb.core_primitives.primitives
         except:
             prims = []
-        for el in prims:
-
+        for prim in prims:
+            el = prim.primitive_object
             if is_ironpython:
                 name = clr.Reference[System.String]()
                 try:
@@ -150,6 +167,23 @@ class Primitives3DLayout(object):
         return self._geometries
 
     @property
+    def components_3d(self):
+        """Components.
+
+        Returns
+        -------
+        list
+            List of components from EDB. If EDB is not present, ``None`` is returned.
+
+        """
+        if not self._components3d:
+            for i in range(1, 1000):
+                cmp_info = self.oeditor.GetComponentInfo(str(i))
+                if cmp_info and "ComponentName" in cmp_info[0]:
+                    self._components3d[str(i)] = Components3DLayout(self, str(i))
+        return self._components3d
+
+    @property
     def pins(self):
         """Pins.
 
@@ -159,6 +193,8 @@ class Primitives3DLayout(object):
             List of pins from EDB. If EDB is not present, ``None`` is returned.
 
         """
+        if not self._app.project_timestamp_changed and self._pins:
+            return self._pins
         try:
             pins_objs = list(self.modeler.edb.pins)
         except:
@@ -191,12 +227,11 @@ class Primitives3DLayout(object):
             List of nets from EDB. If EDB is not present, ``None`` is returned.
 
         """
-        try:
-            nets_objs = list(self.modeler.edb.core_nets.nets)
-        except:
-            nets_objs = {}
-        for el in nets_objs:
-            self._nets[el] = Nets3DLayout(self, el)
+        if not self._app.project_timestamp_changed and self._nets:
+            return self._nets
+        self._nets = {}
+        for net, net_object in self.modeler.edb.core_nets.nets.items():
+            self._nets[net] = Nets3DLayout(self, net, net_object)
         return self._nets
 
     @property
@@ -243,7 +278,7 @@ class Primitives3DLayout(object):
         """Padstack."""
         return Padstack()
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def new_padstack(self, name="Padstack"):
         """Create a `Padstack` object that can be used to create a padstack.
 
@@ -264,7 +299,7 @@ class Primitives3DLayout(object):
             self.padstacks[name] = Padstack(name, self.opadstackmanager, self.model_units)
             return self.padstacks[name]
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def init_padstacks(self):
         """Read all padstacks from HFSS 3D Layout.
 
@@ -342,7 +377,7 @@ class Primitives3DLayout(object):
 
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def change_net_visibility(self, netlist=None, visible=False):
         """Change the visibility of one or more nets.
 
@@ -378,7 +413,7 @@ class Primitives3DLayout(object):
         self._oeditor.SetNetVisible(args)
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_via(
         self,
         padstack="PlanarEMVia",
@@ -462,7 +497,7 @@ class Primitives3DLayout(object):
         #     self.objects[name].set_net_name(netname)
         return name
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_circle(self, layername, x, y, radius, name=None, netname=None):
         """Create a circle on a layer.
 
@@ -516,7 +551,7 @@ class Primitives3DLayout(object):
                 self._geometries[name].set_net_name(netname)
         return name
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_rectangle(self, layername, origin, dimensions, corner_radius=0, angle=0, name=None, netname=None):
         """Create a rectangle on a layer.
 
@@ -575,7 +610,7 @@ class Primitives3DLayout(object):
                 self._geometries[name].set_net_name(netname)
         return name
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_line(self, layername, center_line_list, lw=1, start_style=0, end_style=0, name=None, netname=None):
         """Create a line based on a list of points.
 
@@ -651,7 +686,7 @@ class Primitives3DLayout(object):
                 self._geometries[name].set_net_name(netname)
         return name
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def arg_with_dim(self, Value, sUnits=None):
         """Format arguments with dimensions.
 
@@ -675,3 +710,107 @@ class Primitives3DLayout(object):
             val = "{0}{1}".format(Value, sUnits)
 
         return val
+
+    @pyaedt_function_handler
+    def place_3d_component(
+        self, component_path, number_of_terminals=1, placement_layer=None, component_name=None, pos_x=0, pos_y=0
+    ):  # pragma: no cover
+        """Place a Hfss 3d Component in Hfss3dLayout.
+
+        :param component_path:
+        :param number_of_terminals:
+        :param placement_layer:
+        :return:
+        """
+        if not component_name:
+            component_name = os.path.basename(component_path).split(".")[0]
+        args = ["NAME:" + component_name]
+        infos = [
+            "Type:=",
+            27,
+            "NumTerminals:=",
+            number_of_terminals,
+            "DataSource:=",
+            "",
+            "ModifiedOn:=",
+            1646294080,
+            "Manufacturer:=",
+            "",
+            "Symbol:=",
+            "v1_" + component_name,
+            "ModelNames:=",
+            "",
+            "Footprint:=",
+            "",
+            "Description:=",
+            "",
+            "InfoTopic:=",
+            "",
+            "InfoHelpFile:=",
+            "",
+            "IconFile:=",
+            "BlueDot.bmp",
+            "Library:=",
+            "",
+            "OriginalLocation:=",
+            "Project",
+            "IEEE:=",
+            "",
+            "Author:=",
+            "",
+            "OriginalAuthor:=",
+            "",
+            "CreationDate:=",
+            1646294079,
+            "ExampleFile:=",
+            "",
+            "HiddenComponent:=",
+            0,
+            "CircuitEnv:=",
+            0,
+            "GroupID:=",
+            0,
+        ]
+        args.append("Info:=")
+        args.append(infos)
+        args.append("CircuitEnv:=")
+        args.append(0)
+        args.append("Refbase:=")
+        args.append("U")
+        args.append("NumParts:=")
+        args.append(1)
+        args.append("ModSinceLib:=")
+        args.append(True)
+        args.append("CompExtID:=")
+        args.append(8)
+        args.append("3DCompSourceFileName:=")
+        args.append(component_path)
+
+        _retry_ntimes(10, self.modeler.o_component_manager.Add, args)
+        stack_layers = ["0:{}".format(i) for i in self.modeler.layers.all_layers]
+        drawing = ["{}:{}".format(i, i) for i in self.modeler.layers.drawing_layers]
+        arg_x = self.modeler._arg_with_dim(pos_x)
+        arg_y = self.modeler._arg_with_dim(pos_y)
+        args = [
+            "NAME:Contents",
+            "definition_name:=",
+            component_name,
+            "placement:=",
+            ["x:=", arg_x, "y:=", arg_y],
+            "layer:=",
+            placement_layer,
+            "isCircuit:=",
+            False,
+            "compInstName:=",
+            "1",
+            "rect_width:=",
+            0.01,
+            "StackupLayers:=",
+            stack_layers,
+            "DrawLayers:=",
+            drawing,
+        ]
+        comp_name = _retry_ntimes(10, self.modeler.oeditor.CreateComponent, args)
+        comp = ComponentsSubCircuit3DLayout(self, comp_name.split(";")[-1])
+        self.components_3d[comp_name.split(";")[-1]] = comp
+        return comp  #

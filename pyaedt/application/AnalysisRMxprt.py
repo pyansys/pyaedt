@@ -1,7 +1,6 @@
-from pyaedt.generic.general_methods import aedt_exception_handler
-from pyaedt.modeler.Model2D import ModelerRMxprt
 from pyaedt.application.Analysis import Analysis
-from pyaedt.application.Design import design_solutions
+from pyaedt.generic.general_methods import pyaedt_function_handler
+from pyaedt.modeler.Model2D import ModelerRMxprt
 from pyaedt.modules.PostProcessor import CircuitPostProcessor
 
 
@@ -18,24 +17,6 @@ class FieldAnalysisRMxprt(Analysis):
     -------
 
     """
-
-    @property
-    def solution_type(self):
-        """Solution type."""
-        return self._solution_type
-
-    @solution_type.setter
-    def solution_type(self, soltype):
-        sol = design_solutions[self._design_type]
-        if not soltype:
-            soltype = sol[0]
-        elif soltype not in sol:
-            soltype = sol[0]
-        try:
-            self.odesign.SetDesignFlow(self._design_type, soltype)
-            self._solution_type = soltype
-        except:
-            pass
 
     def __init__(
         self,
@@ -78,7 +59,7 @@ class FieldAnalysisRMxprt(Analysis):
         """
         return self._modeler
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def disable_modelcreation(self, solution_type=None):
         """Enable the RMxprt solution.
 
@@ -97,7 +78,7 @@ class FieldAnalysisRMxprt(Analysis):
         self.solution_type = solution_type
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def enable_modelcreation(self, solution_type=None):
         """Enable model creation for the Maxwell model wizard.
 
@@ -116,24 +97,15 @@ class FieldAnalysisRMxprt(Analysis):
         self.solution_type = solution_type
         return True
 
-    # @property
-    # def mesh(self):
-    #     return self._mesh
-    #
-    # @property
-    # def post(self):
-    #     return self._post
-
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _check_solution_consistency(self):
-        """Check solution consistency.
-        """
-        if self._solution_type:
-            return self._odesign.GetSolutionType() == self._solution_type
+        """Check solution consistency."""
+        if self.design_solutions:
+            return self._odesign.GetSolutionType() == self.design_solutions._solution_type
         else:
             return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _check_design_consistency(self):
         """Check design consistency."""
         consistent = False

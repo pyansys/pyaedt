@@ -10,41 +10,49 @@ This module contains the configuration and fixture for the pytest-based unit tes
 The default configuration can be changed by placing a file called local_config.json in the same
 directory as this module. An example of the contents of local_config.json
 {
-  "desktopVersion": "2021.2",
+  "desktopVersion": "2022.1",
   "NonGraphical": false,
   "NewThread": false,
   "test_desktops": true
 }
 
 """
-import tempfile
+import gc
+import json
 import os
 import shutil
-import json
-import gc
 import sys
-from pyaedt.generic.general_methods import is_ironpython, inside_desktop
+import tempfile
 
+from pyaedt import settings
+from pyaedt.generic.general_methods import generate_unique_name
+from pyaedt.generic.general_methods import inside_desktop
+from pyaedt.generic.general_methods import is_ironpython
+
+log_path = os.path.join(tempfile.gettempdir(), "test.log")
+if os.path.exists(os.path.join(tempfile.gettempdir(), "test.log")):
+    os.remove(log_path)
+settings.logger_file_path = log_path
+settings.enable_error_handler = False
+settings.enable_desktop_logs = False
 if is_ironpython:
     import _unittest_ironpython.conf_unittest as pytest
 else:
     import pytest
 
-os.environ["PYAEDT_ERROR_HANDLER"] = "False"
 
 local_path = os.path.dirname(os.path.realpath(__file__))
 
 from pyaedt import Desktop
 
 # Import required modules
-from pyaedt import Hfss
-from pyaedt.application.Design import DesignCache
+from pyaedt import Hfss, Edb
 from pyaedt.generic.filesystem import Scratch
 
 test_project_name = "test_primitives"
 
 sys.path.append(local_path)
-from .launch_desktop_tests import run_desktop_tests
+from _unittest.launch_desktop_tests import run_desktop_tests
 
 # set scratch path and create it if necessary
 scratch_path = tempfile.gettempdir()
@@ -57,74 +65,129 @@ if os.path.exists(local_config_file):
     with open(local_config_file) as f:
         config = json.load(f)
 else:
-    default_version = "2021.2"
-    if inside_desktop and "oDesktop" in dir(sys.modules['__main__']):
-        default_version = sys.modules['__main__'].oDesktop.GetVersion()[0:6]
-    config = {"desktopVersion": default_version, "NonGraphical": False, "NewThread": True, "test_desktops": False,
-              "build_machine": True, "skip_space_claim": False, "skip_circuits": False, "skip_edb": False,
-              "skip_debug": False, "local": False}
+    default_version = "2022.1"
+    if inside_desktop and "oDesktop" in dir(sys.modules["__main__"]):
+        default_version = sys.modules["__main__"].oDesktop.GetVersion()[0:6]
+    config = {
+        "desktopVersion": default_version,
+        "NonGraphical": True,
+        "NewThread": True,
+        "test_desktops": False,
+        "build_machine": True,
+        "skip_space_claim": False,
+        "skip_circuits": False,
+        "skip_edb": False,
+        "skip_debug": False,
+        "local": False,
+    }
+settings.non_graphical = config["NonGraphical"]
 
 
-class BasisTest:
-    def setup_class(self, project_name=None, design_name=None, solution_type=None, application=None):
+class BasisTest(object):
+    def my_setup(self):
+        self.local_scratch = Scratch(scratch_path)
+        self.aedtapps = []
+        self.edbapps = []
 
-        with Scratch(scratch_path) as self.local_scratch:
-            if project_name:
-                example_project = os.path.join(local_path, "example_models", project_name + ".aedt")
-                if os.path.exists(example_project):
-                    self.test_project = self.local_scratch.copyfile(example_project)
-                else:
-                    self.test_project = None
+    def my_teardown(self):
+        try:
+            oDesktop = sys.modules["__main__"].oDesktop
+        except Exception as e:
+            oDesktop = None
+        if oDesktop and not settings.non_graphical:
+            oDesktop.ClearMessages("", "", 3)
+        for edbapp in self.edbapps[::-1]:
+            try:
+                edbapp.close_edb()
+            except:
+                pass
+        del self.edbapps
+        for aedtapp in self.aedtapps[::-1]:
+            try:
+                aedtapp.close_project(None, False)
+            except:
+                pass
+        del self.aedtapps
+
+    def add_app(self, project_name=None, design_name=None, solution_type=None, application=None):
+        if "oDesktop" not in dir(sys.modules["__main__"]):
+            desktop = Desktop(desktop_version, settings.non_graphical, new_thread)
+            desktop.disable_autosave()
+        if project_name:
+            example_project = os.path.join(local_path, "example_models", project_name + ".aedt")
+            example_folder = os.path.join(local_path, "example_models", project_name + ".aedb")
+            if os.path.exists(example_project):
+                self.test_project = self.local_scratch.copyfile(example_project)
+            elif os.path.exists(example_project + "z"):
+                example_project = example_project + "z"
+                self.test_project = self.local_scratch.copyfile(example_project)
             else:
-                self.test_project = None
-            if not application:
-                application = Hfss
-
-            self.aedtapp = application(
+                self.test_project = project_name
+            if os.path.exists(example_folder):
+                target_folder = os.path.join(self.local_scratch.path, project_name + ".aedb")
+                self.local_scratch.copyfolder(example_folder, target_folder)
+        else:
+            self.test_project = None
+        if not application:
+            application = Hfss
+        self.aedtapps.append(
+            application(
                 projectname=self.test_project,
                 designname=design_name,
                 solution_type=solution_type,
                 specified_version=desktop_version,
             )
-            self.project_name = self.aedtapp.project_name
-            self.cache = DesignCache(self.aedtapp)
+        )
+        return self.aedtapps[-1]
 
-    def teardown_class(self):
-        self.aedtapp._desktop.ClearMessages("", "", 3)
-        if self.project_name in self.aedtapp.project_list:
-            self.aedtapp.close_project(name=self.project_name, saveproject=False)
-        self.local_scratch.remove()
-        gc.collect()
+    def add_edb(self, project_name=None):
+        if project_name:
+            example_folder = os.path.join(local_path, "example_models", project_name + ".aedb")
+            if os.path.exists(example_folder):
+                target_folder = os.path.join(self.local_scratch.path, project_name + ".aedb")
+                self.local_scratch.copyfolder(example_folder, target_folder)
+            else:
+                target_folder = os.path.join(self.local_scratch.path, project_name + ".aedb")
+        else:
+            target_folder = os.path.join(self.local_scratch.path, generate_unique_name("TestEdb") + ".aedb")
+        self.edbapps.append(
+            Edb(
+                target_folder,
+                edbversion=desktop_version,
+            )
+        )
+        return self.edbapps[-1]
 
     def teardown(self):
         """
         Could be redefined
         """
+        pass
 
     def setup(self):
         """
         Could be redefined
         """
+        pass
 
 
 # Define desktopVersion explicitly since this is imported by other modules
 desktop_version = config["desktopVersion"]
 new_thread = config["NewThread"]
-non_graphical = config["NonGraphical"]
 
 
 @pytest.fixture(scope="session", autouse=True)
 def desktop_init():
-    desktop = Desktop(desktop_version, non_graphical, new_thread)
-    desktop.disable_autosave()
-    yield desktop
 
-    # If new_thread is set to false by a local_config, then don't close the desktop.
-    # Intended for local debugging purposes only
-    if new_thread or os.name == "posix":
-        desktop.close_desktop()
+    yield
+    if not is_ironpython:
+        try:
+            oDesktop = sys.modules["__main__"].oDesktop
+            pid = oDesktop.GetProcessID()
+            os.kill(pid, 9)
+        except:
+            pass
     p = [x[0] for x in os.walk(scratch_path) if "scratch" in x[0]]
-    # p = pathlib.Path(scratch_path).glob('**/scratch*')
     for folder in p:
         shutil.rmtree(folder, ignore_errors=True)
 
@@ -143,6 +206,7 @@ def clean_desktop(desktop_init):
     """Close all projects, but don't close Desktop app."""
     desktop_init.release_desktop(close_projects=True, close_on_exit=False)
     return desktop_init
+
 
 @pytest.fixture
 def hfss():
@@ -167,7 +231,7 @@ def pyaedt_unittest_check_desktop_error(func):
         except Exception as e:
             pytest.exit("Desktop Crashed - Aborting the test!")
         args[0].cache.update()
-        # model_report = args[0].aedtapp.modeler.primitives.model_consistency_report
+        # model_report = args[0].aedtapp.modeler.model_consistency_report
         # assert not model_report["Missing Objects"]
         # assert not model_report["Non-Existent Objects"]
         assert args[0].cache.no_new_errors

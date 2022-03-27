@@ -2,12 +2,14 @@
 This module contains EDB general methods and related methods.
 
 """
-from __future__ import absolute_import
+
+from __future__ import absolute_import  # noreorder
 
 import logging
+import os
 import warnings
 
-from pyaedt.generic.general_methods import aedt_exception_handler
+from pyaedt.generic.general_methods import pyaedt_function_handler
 
 try:
     import clr
@@ -15,12 +17,13 @@ try:
     clr.AddReference("System.Collections")
     from System.Collections.Generic import List
 except ImportError:
-    warnings.warn("This module requires pythonnet.")
+    if os.name != "posix":
+        warnings.warn("This module requires pythonnet.")
 
 logger = logging.getLogger(__name__)
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def convert_netdict_to_pydict(dict_in):
     """Convert a net dictionary to a Python dictionary.
 
@@ -41,7 +44,7 @@ def convert_netdict_to_pydict(dict_in):
     return pydict
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def convert_pydict_to_netdict(dict):
     """Convert a Python dictionarty to a Net dictionary.
 
@@ -60,7 +63,7 @@ def convert_pydict_to_netdict(dict):
     # to be completed
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def convert_py_list_to_net_list(pylist):
     """Convert a Python list to a Net list.
 
@@ -84,7 +87,7 @@ def convert_py_list_to_net_list(pylist):
         return net_list
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def convert_net_list_to_py_list(netlist):
     """Convert a Net list to a Python list.
 

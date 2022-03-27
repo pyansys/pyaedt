@@ -24,9 +24,11 @@ Example without NativeComponentObject:
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
    NativeComponentObject
    BoundaryObject
+   FarFieldSetup
+   Matrix
+
 

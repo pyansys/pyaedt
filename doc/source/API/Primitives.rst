@@ -7,7 +7,7 @@ This section lists the core AEDT Modeler modules:
 * Primitives
 * Objects
 
-They are accessible through the ``modeler``,  ``modeler.primitives`` and ``modeler.primitives.objects`` property:
+They are accessible through the ``modeler`` and ``modeler.objects`` property:
 
 .. code:: python
 
@@ -20,7 +20,7 @@ They are accessible through the ``modeler``,  ``modeler.primitives`` and ``model
     modeler = app.modeler
 
     # this call return a Primitives3D Object
-    primitives = modeler.primitives
+    primitives = modeler
 
     # this call return a Object3d Object
     my_box = primitives.create_box([0,0,0],[10,10,10])
@@ -49,7 +49,7 @@ modeler, including all primitives methods and properties.
 * Modeler2D for ``Maxwell2D`` ``Q2d``
 * Modeler3DLayout for ``Hfss3dLayout``
 * ModelerNexxim for ``Circuit``
-* ModelerSimplorer for ``Simplorer``
+* ModelerTwinBuilder for ``TwinBuilder``
 * ModelerEmit for ``Emit``
 
 
@@ -57,14 +57,13 @@ modeler, including all primitives methods and properties.
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
    Model2D.Modeler2D
    Model3D.Modeler3D
    Model3DLayout.Modeler3DLayout
    Circuit.ModelerNexxim
-   Circuit.ModelerSimplorer
+   Circuit.ModelerTwinBuilder
    Circuit.ModelerEmit
 
 
@@ -77,9 +76,9 @@ The ``Primitives`` module includes these classes:
 * Primitives2D for ``Maxwell2D`` ``Q2d``
 * Primitives3DLayout for ``Hfss3dLayout``
 * NexximComponents for ``Circuit``
-* SimplorerComponents for ``Simplorer``
+* TwinBuilderComponents for ``TwinBuilder``
 * CircuitComponents for ``Emit``
-Primives objects are accessible through ``modeler.primitives`` property for
+Primives objects are accessible through ``modeler`` property for
 EM Solver and ``modeler.components`` for circuit solvers.
 
 .. code:: python
@@ -99,7 +98,6 @@ EM Solver and ``modeler.components`` for circuit solvers.
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
 
@@ -107,7 +105,7 @@ EM Solver and ``modeler.components`` for circuit solvers.
    Primitives3D.Primitives3D
    Primitives3DLayout.Primitives3DLayout
    PrimitivesNexxim.NexximComponents
-   PrimitivesSimplorer.SimplorerComponents
+   PrimitivesTwinBuilder.TwinBuilderComponents
    PrimitivesCircuit.CircuitComponents
 
 
@@ -128,7 +126,7 @@ It contains all getter and setter to simplify object manipulation.
     modeler = app.modeler
 
     # this call return a Primitives3D Object
-    primitives = modeler.primitives
+    primitives = modeler
 
     # this call return a Object3d Object
     my_box = primitives.create_box([0,0,0],[10,10,10])
@@ -146,13 +144,13 @@ It contains all getter and setter to simplify object manipulation.
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
    Object3d.Object3d
    Object3d.FacePrimitive
    Object3d.EdgePrimitive
    Object3d.VertexPrimitive
+   Object3d.Point
    Primitives.PolylineSegment
    Primitives.Polyline
 
@@ -190,12 +188,10 @@ It contains all getter and setter to simplify object manipulation.
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
    Object3d.CircuitComponent
    Object3d.CircuitPins
-   Object3d.ComponentParameters
 
 
 Objects in Hfss3d Layout
@@ -214,7 +210,7 @@ It contains all getter and setter to simplify object manipulation.
     modeler = app.modeler
 
     # this call return a Primitives3D Object
-    primitives = modeler.primitives
+    primitives = modeler
 
     # this call return a Object3d Object
     my_rect = primitives.create_rectangle([0,0,0],[10,10])
@@ -229,7 +225,6 @@ It contains all getter and setter to simplify object manipulation.
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
    Object3d.Objec3DLayout
@@ -269,7 +264,6 @@ GeometryOperators can be imported and used as it is made by static methods.
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
    Modeler.CoordinateSystem

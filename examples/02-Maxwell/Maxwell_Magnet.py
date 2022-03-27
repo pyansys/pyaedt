@@ -1,6 +1,6 @@
 """
-Magnet Example
---------------
+Maxwell 3d: Magnet DC Analysis
+------------------------------
 This example shows how you can use PyAEDT to create a Maxwell DC Analysis,
 compute mass center and move Coordinate Systems.
 """
@@ -16,8 +16,8 @@ if not os.path.exists(tmpfold):
 ###############################################################################
 # Launch AEDT in Graphical Mode
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# This examples launches AEDT 2021.2 in graphical mode.
-m3d = Maxwell3d(specified_version="2021.2", new_desktop_session=True)
+# This examples launches AEDT 2022R1 in graphical mode.
+m3d = Maxwell3d(specified_version="2022.1", new_desktop_session=True)
 
 
 ###############################################################################
@@ -31,7 +31,7 @@ m3d.solution_type = m3d.SOLUTIONS.Maxwell3d.ElectroDCConduction
 # Create Magnet
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-magnet = m3d.modeler.primitives.create_box([7, 4, 22], [10, 5, 30], name="Magnet", matname="copper")
+magnet = m3d.modeler.create_box([7, 4, 22], [10, 5, 30], name="Magnet", matname="copper")
 
 
 ###############################################################################
@@ -40,6 +40,12 @@ magnet = m3d.modeler.primitives.create_box([7, 4, 22], [10, 5, 30], name="Magnet
 m3d.assign_voltage(magnet.faces, 0)
 m3d.create_setup()
 
+
+###############################################################################
+# Plot the model
+# ~~~~~~~~~~~~~~
+
+m3d.plot(show=False, export_path=os.path.join(m3d.working_directory, "Image.jpg"), plot_air_objects=True)
 
 ###############################################################################
 # Solve Setup
@@ -90,9 +96,9 @@ m3d[magnet.name + "z"] = str(zval * 1e3) + "mm"
 # ~~~~~~~~~~~~~~~~~~~~~~~~
 # Parametric Coordinate System is created
 
-cs1 = m3d.modeler.create_coordinate_system([magnet.name + "x", magnet.name + "y", magnet.name + "z"],
-                                           reference_cs="Global",
-                                           name=magnet.name + "CS")
+cs1 = m3d.modeler.create_coordinate_system(
+    [magnet.name + "x", magnet.name + "y", magnet.name + "z"], reference_cs="Global", name=magnet.name + "CS"
+)
 
 
 ###############################################################################

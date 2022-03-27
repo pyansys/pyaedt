@@ -1,15 +1,13 @@
 """
-This module contains these classes: `AEDTMessageManager`, `EDBMessageManager`,
-and `MessageList`.
+This module contains the ``AEDTMessageManager`` class.
 
 This module provides all functionalities for logging errors and messages
 in both AEDT and the log file.
 """
-
 import logging
-import os
 import sys
 
+from pyaedt import settings
 
 message_levels = {"Global": 0, "Project": 1, "Design": 2}
 
@@ -19,7 +17,8 @@ class Msg:
 
 
 class MessageList:
-    """Collects and returns messages from the AEDT Message Manager for a specified project name and design name.
+    """
+    Collects and returns messages from the AEDT message manager for a specified project name and design name.
 
     Parameters
     ---------
@@ -69,7 +68,8 @@ class MessageList:
 
 
 class AEDTMessageManager(object):
-    """Manages AEDT messaging to both the logger and the AEDT Message Manager window.
+    """
+    Manages AEDT messaging to both the logger and the AEDT message manager.
 
     Parameters
     ----------
@@ -105,30 +105,53 @@ class AEDTMessageManager(object):
 
     def __init__(self, app=None):
         self._app = app
-        if not app:
-            if "oDesktop" in dir(sys.modules["__main__"]):
-                self.MainModule = sys.modules["__main__"]
-                self._desktop = self.MainModule.oDesktop
-                self._log_on_desktop = os.getenv("PYAEDT_DESKTOP_LOGS", "True").lower() in (
-                    "true",
-                    "1",
-                    "t",
-                    "yes",
-                    "y",
-                )
-            else:
-                self._log_on_desktop = False
-                self._desktop = None
-        else:
-            self._desktop = self._app._desktop
-            self._log_on_desktop = os.getenv("PYAEDT_DESKTOP_LOGS", "True").lower() in ("true", "1", "t")
-        self._log_on_file = os.getenv("PYAEDT_FILE_LOGS", "True").lower() in ("true", "1", "t")
-        self._log_on_screen = os.getenv("PYAEDT_SCREEN_LOGS", "True").lower() in ("true", "1", "t")
 
-        if self._log_on_file:
-            self.logger = logging.getLogger(__name__)
+    @property
+    def _desktop(self):
+        if self._app:
+            return self._app._desktop  # pragma: no cover
+        if "oDesktop" in dir(sys.modules["__main__"]):
+            MainModule = sys.modules["__main__"]
+            return MainModule.oDesktop
+        return None  # pragma: no cover
+
+    @property
+    def _log_on_desktop(self):
+        if self._desktop and settings.enable_desktop_logs:
+            return True
         else:
-            self.logger = None
+            return False
+
+    @_log_on_desktop.setter
+    def _log_on_desktop(self, val):
+        settings.enable_desktop_logs = val
+
+    @property
+    def _log_on_file(self):
+        return settings.enable_file_logs
+
+    @_log_on_file.setter
+    def _log_on_file(self, val):
+        settings.enable_file_logs = val
+
+    @property
+    def _log_on_screen(self):
+        return settings.enable_screen_logs
+
+    @_log_on_screen.setter
+    def _log_on_screen(self, val):
+        settings.enable_screen_logs = val
+
+    @property
+    def logger(self):
+        """Aedt Logger object."""
+        if self._log_on_file:
+            try:
+                return logging.getLogger(__name__)
+            except:
+                return None
+        else:
+            return None  # pragma: no cover
 
     @property
     def messages(self):
@@ -143,7 +166,8 @@ class AEDTMessageManager(object):
         return self.get_messages(self._project_name, self._design_name)
 
     def get_messages(self, project_name, design_name):
-        """Retrieve the Message Manager content for a specified project and design.
+        """
+        Retrieve the message manager content for a specified project and design.
 
         If the specified project and design names are invalid, they are ignored.
 
@@ -164,9 +188,11 @@ class AEDTMessageManager(object):
             global_message_data = self._desktop.GetMessages("", "", 0)
             message_data = MessageList(global_message_data, project_name, design_name)
             return message_data
+        return MessageList([], project_name, design_name)
 
     def add_error_message(self, message_text, level=None):
-        """Add a type 2 "Error" message to the Message Manager tree.
+        """
+        Add a type 2 "Error" message to the message manager tree.
 
         Also add an error message to the logger if the handler is present.
 
@@ -182,7 +208,7 @@ class AEDTMessageManager(object):
 
         Examples
         --------
-        Add an error message to the AEDT Message Manager.
+        Add an error message to the AEDT message manager.
 
         >>> hfss.logger.project.error("Project Error Message", "Project")
 
@@ -190,7 +216,8 @@ class AEDTMessageManager(object):
         self.add_message(2, message_text, level)
 
     def add_warning_message(self, message_text, level=None):
-        """Add a type 1 "Warning" message to the Message Manager tree.
+        """
+        Add a type 1 "Warning" message to the message manager tree.
 
         Also add a warning message to the logger if the handler is present.
 
@@ -206,7 +233,7 @@ class AEDTMessageManager(object):
 
         Examples
         --------
-        Add a warning message to the AEDT Message Manager.
+        Add a warning message to the AEDT message manager.
 
         >>> hfss.logger.warning("Global warning message")
 
@@ -214,7 +241,7 @@ class AEDTMessageManager(object):
         self.add_message(1, message_text, level)
 
     def add_info_message(self, message_text, level=None):
-        """Add a type 0 "Info" message to the active design level of the Message Manager tree.
+        """Add a type 0 "Info" message to the active design level of the message manager tree.
 
         Also add an info message to the logger if the handler is present.
 
@@ -238,7 +265,8 @@ class AEDTMessageManager(object):
         self.add_message(0, message_text, level)
 
     def add_debug_message(self, type, message_text):
-        """Parameterized message to the Message Manager to specify the type and project or design level.
+        """
+        Parameterized message to the message manager to specify the type and project or design level.
 
         Parameters
         ----------
@@ -267,7 +295,8 @@ class AEDTMessageManager(object):
                 self.logger.error(message_text)
 
     def add_message(self, type, message_text, level=None, proj_name=None, des_name=None):
-        """Pass a parameterized message to the Message Manager to specify the type and project or design level.
+        """
+        Pass a parameterized message to the message manager to specify the type and project or design level.
 
         Parameters
         ----------
@@ -309,7 +338,10 @@ class AEDTMessageManager(object):
                 des_name = self._design_name
             if des_name and ";" in des_name:
                 des_name = des_name[des_name.find(";") + 1 :]
-            self._desktop.AddMessage(proj_name, des_name, type, message_text)
+            try:
+                self._desktop.AddMessage(proj_name, des_name, type, message_text)
+            except:
+                print("pyaedt info: Failed in Adding Desktop Message")
 
         if len(message_text) > 250:
             message_text = message_text[:250] + "..."

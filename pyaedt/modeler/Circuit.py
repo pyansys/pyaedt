@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
-from pyaedt.generic.general_methods import aedt_exception_handler, _retry_ntimes
-from pyaedt.modules.LayerStackup import Layers
+from pyaedt.generic.constants import AEDT_UNITS
+from pyaedt.generic.general_methods import _retry_ntimes
+from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.modeler.Modeler import Modeler
+from pyaedt.modeler.Object3d import _dim_arg
+from pyaedt.modeler.Object3d import CircuitComponent
 from pyaedt.modeler.Primitives3DLayout import Primitives3DLayout
 from pyaedt.modeler.PrimitivesEmit import EmitComponents
+from pyaedt.modeler.PrimitivesMaxwellCircuit import MaxwellCircuitComponents
 from pyaedt.modeler.PrimitivesNexxim import NexximComponents
-from pyaedt.modeler.PrimitivesSimplorer import SimplorerComponents
-from pyaedt.modeler.Object3d import CircuitComponent
-from pyaedt.modeler.Object3d import _dim_arg
-from pyaedt.generic.constants import AEDT_UNITS
+from pyaedt.modeler.PrimitivesTwinBuilder import TwinBuilderComponents
+from pyaedt.modules.LayerStackup import Layers
 
 
 class ModelerCircuit(Modeler):
@@ -54,7 +56,18 @@ class ModelerCircuit(Modeler):
         >>> oEditor.GetModelBoundingBox()"""
         return self.oeditor.GetModelBoundingBox()
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
+    def zoom_to_fit(self):
+        """Zoom To Fit.
+
+        References
+        ----------
+
+        >>> oEditor.ZoomToFit
+        """
+        self.oeditor.ZoomToFit()
+
+    @pyaedt_function_handler()
     def connect_schematic_components(self, firstcomponent, secondcomponent, pinnum_first=2, pinnum_second=1):
         """Connect schematic components.
 
@@ -122,8 +135,7 @@ class ModelerNexxim(ModelerCircuit):
             self.layouteditor = self._odesign.SetActiveEditor("Layout")
             self._odesign.SetActiveEditor("SchematicEditor")
         self.layers = Layers(self, roughnessunits="um")
-        self._primitives = Primitives3DLayout(self)
-        self._primitivesDes = self._app.project_name + self._app.design_name
+        self._primitives = Primitives3DLayout(app)
 
     @property
     def schematic(self):
@@ -184,9 +196,6 @@ class ModelerNexxim(ModelerCircuit):
         """
         if self._app.design_type == "Twin Builder":
             return
-        if self._primitivesDes != self._app.project_name + self._app.design_name:
-            self._primitives = Primitives3DLayout(self)
-            self._primitivesDes = self._app.project_name + self._app.design_name
         return self._primitives
 
     @property
@@ -209,7 +218,7 @@ class ModelerNexxim(ModelerCircuit):
         """ Set the model units as a string e.g. "mm" """
         self.oeditor.SetActivelUnits(["NAME:Units Parameter", "Units:=", units, "Rescale:=", False])
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def move(self, selections, pos, units="meter"):
         """Move the selections by ``[x, y]``.
 
@@ -250,12 +259,21 @@ class ModelerNexxim(ModelerCircuit):
 
         self.oeditor.Move(
             ["NAME:Selections", "Selections:=", sels],
-            ["NAME:MoveParameters", "xdelta:=", x_location, "ydelta:=", y_location, "Disconnect:=", False,
-             "Rubberband:=", False],
+            [
+                "NAME:MoveParameters",
+                "xdelta:=",
+                x_location,
+                "ydelta:=",
+                y_location,
+                "Disconnect:=",
+                False,
+                "Rubberband:=",
+                False,
+            ],
         )
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def rotate(self, selections, degrees=90):
         """Rotate the selections by degrees.
 
@@ -284,31 +302,38 @@ class ModelerNexxim(ModelerCircuit):
 
         self.oeditor.Rotate(
             ["NAME:Selections", "Selections:=", sels],
-            ["NAME:RotateParameters", "Degrees:=", _dim_arg(degrees, "°"), "Disconnect:=", False, "Rubberband:=",
-             False],
+            [
+                "NAME:RotateParameters",
+                "Degrees:=",
+                _dim_arg(degrees, "°"),
+                "Disconnect:=",
+                False,
+                "Rubberband:=",
+                False,
+            ],
         )
         return True
 
 
-class ModelerSimplorer(ModelerCircuit):
-    """ModelerSimplorer class.
+class ModelerTwinBuilder(ModelerCircuit):
+    """ModelerTwinBuilder class.
 
     Parameters
     ----------
-    app : :class:`pyaedt.application.AnalysisSimplorer.FieldAnalysisSimplorer`
+    app : :class:`pyaedt.application.AnalysisTwinBuilder.AnalysisTwinBuilder`
 
     """
 
     def __init__(self, app):
         self._app = app
         ModelerCircuit.__init__(self, app)
-        self._components = SimplorerComponents(self)
+        self._components = TwinBuilderComponents(self)
 
     @property
     def components(self):
         """
         .. deprecated:: 0.4.13
-           Use :func:`Simplorer.modeler.schematic` instead.
+           Use :func:`TwinBuilder.modeler.schematic` instead.
 
         """
         return self._components
@@ -319,7 +344,7 @@ class ModelerSimplorer(ModelerCircuit):
 
         Returns
         -------
-        :class:`pyaedt.modeler.PrimitivesSimplorer.SimplorerComponents`
+        :class:`pyaedt.modeler.PrimitivesTwinBuilder.TwinBuilderComponents`
 
         """
         return self._components
@@ -330,7 +355,7 @@ class ModelerEmit(ModelerCircuit):
 
     Parameters
     ----------
-    app : :class:`pyaedt.application.AnalysisSimplorer.FieldAnalysisSimplorer`
+    app : :class:`pyaedt.application.AnalysisEmit`
 
     """
 
@@ -338,3 +363,29 @@ class ModelerEmit(ModelerCircuit):
         self._app = app
         ModelerCircuit.__init__(self, app)
         self.components = EmitComponents(app, self)
+
+
+class ModelerMaxwellCircuit(ModelerCircuit):
+    """ModelerMaxwellCircuit class.
+
+    Parameters
+    ----------
+    app : :class:`pyaedt.application.AnalysisMaxwellCircuit`
+
+    """
+
+    def __init__(self, app):
+        self._app = app
+        ModelerCircuit.__init__(self, app)
+        self._components = MaxwellCircuitComponents(self)
+
+    @property
+    def schematic(self):
+        """Schematic Object.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.PrimitivesMaxwellCircuit.MaxwellCircuitComponents`
+
+        """
+        return self._components

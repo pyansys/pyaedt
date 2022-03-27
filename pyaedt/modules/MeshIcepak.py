@@ -1,7 +1,10 @@
 from collections import OrderedDict
 
-from pyaedt.generic.general_methods import aedt_exception_handler, generate_unique_name
-from pyaedt.modules.Mesh import meshers, MeshOperation
+from pyaedt import settings
+from pyaedt.generic.general_methods import generate_unique_name
+from pyaedt.generic.general_methods import pyaedt_function_handler
+from pyaedt.modules.Mesh import meshers
+from pyaedt.modules.Mesh import MeshOperation
 
 
 class IcepakMesh(object):
@@ -69,8 +72,22 @@ class IcepakMesh(object):
             self.Objects = ["Region"]
             self.SubModels = False
             self.Enable = True
+            self.ProximitySizeFunction = True
+            self.CurvatureSizeFunction = True
+            self.EnableTransition = False
+            self.OptimizePCBMesh = True
+            self.Enable2DCutCell = False
+            self.EnforceCutCellMeshing = False
+            self.Enforce2dot5DCutCell = False
+            self.SlackMinX = "0mm"
+            self.SlackMinY = "0mm"
+            self.SlackMinZ = "0mm"
+            self.SlackMaxX = "0mm"
+            self.SlackMaxY = "0mm"
+            self.SlackMaxZ = "0mm"
+            self.CoordCS = "Global"
 
-        @aedt_exception_handler
+        @pyaedt_function_handler()
         def _dim_arg(self, value):
             if type(value) is str:
                 try:
@@ -81,6 +98,47 @@ class IcepakMesh(object):
             else:
                 val = "{0}{1}".format(value, self.model_units)
             return val
+
+        @property
+        def _new_versions_fields(self):
+            arg = []
+            if settings.aedt_version > "2021.2":
+                arg = [
+                    "ProximitySizeFunction:=",
+                    self.ProximitySizeFunction,
+                    "CurvatureSizeFunction:=",
+                    self.CurvatureSizeFunction,
+                    "EnableTransition:=",
+                    self.EnableTransition,
+                    "OptimizePCBMesh:=",
+                    self.OptimizePCBMesh,
+                    "Enable2DCutCell:=",
+                    self.Enable2DCutCell,
+                    "EnforceCutCellMeshing:=",
+                    self.EnforceCutCellMeshing,
+                    "Enforce2dot5DCutCell:=",
+                    self.Enforce2dot5DCutCell,
+                ]
+            if settings.aedt_version >= "2022.2":
+                arg.extend(
+                    [
+                        "SlackMinX:=",
+                        self.SlackMinX,
+                        "SlackMinY:=",
+                        self.SlackMinY,
+                        "SlackMinZ:=",
+                        self.SlackMinZ,
+                        "SlackMaxX:=",
+                        self.SlackMaxX,
+                        "SlackMaxY:=",
+                        self.SlackMaxY,
+                        "SlackMaxZ:=",
+                        self.SlackMaxZ,
+                        "CoordCS:=",
+                        self.CoordCS,
+                    ]
+                )
+            return arg
 
         @property
         def autosettings(self):
@@ -107,6 +165,7 @@ class IcepakMesh(object):
             else:
                 arg.append("Objects:=")
                 arg.append(self.Objects)
+            arg.extend(self._new_versions_fields)
             return arg
 
         @property
@@ -161,6 +220,7 @@ class IcepakMesh(object):
             else:
                 arg.append("Objects:=")
                 arg.append(self.Objects)
+            arg.extend(self._new_versions_fields)
             return arg
 
         @property
@@ -168,7 +228,7 @@ class IcepakMesh(object):
             """Instance of a design in a project."""
             return self._app._odesign
 
-        @aedt_exception_handler
+        @pyaedt_function_handler()
         def update(self):
             """Update mesh region settings with the settings in the object variable.
 
@@ -197,7 +257,7 @@ class IcepakMesh(object):
                 self.meshmodule.EditMeshRegion(self.name, args)
             return True
 
-        @aedt_exception_handler
+        @pyaedt_function_handler()
         def create(self):
             """Create a new mesh region.
 
@@ -225,14 +285,15 @@ class IcepakMesh(object):
         """Bounding dimension."""
         return self.modeler.get_bounding_dimension()
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _get_design_mesh_operations(self):
         """Retrieve design mesh operations."""
         meshops = []
         try:
             for ds in self._app.design_properties["MeshRegion"]["MeshSetup"]["MeshOperations"]:
-                if isinstance(self._app.design_properties["MeshRegion"]["MeshSetup"]["MeshOperations"][
-                                  ds], (OrderedDict, dict)):
+                if isinstance(
+                    self._app.design_properties["MeshRegion"]["MeshSetup"]["MeshOperations"][ds], (OrderedDict, dict)
+                ):
                     meshops.append(
                         MeshOperation(
                             self,
@@ -245,14 +306,15 @@ class IcepakMesh(object):
             pass
         return meshops
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _get_design_mesh_regions(self):
         """Retrieve design mesh regions."""
         meshops = []
         try:
             for ds in self._app.design_properties["MeshRegion"]["MeshSetup"]["MeshRegions"]:
-                if isinstance(self._app.design_properties["MeshRegion"]["MeshSetup"]["MeshRegions"][ds],
-                              (OrderedDict, dict)):
+                if isinstance(
+                    self._app.design_properties["MeshRegion"]["MeshSetup"]["MeshRegions"][ds], (OrderedDict, dict)
+                ):
                     meshop = self.MeshRegion(self.omeshmodule, self.boundingdimension, self.modeler.model_units)
                     dict_prop = self._app.design_properties["MeshRegion"]["MeshSetup"]["MeshRegions"][ds]
                     self.name = ds
@@ -264,7 +326,7 @@ class IcepakMesh(object):
             pass
         return meshops
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def assign_mesh_level(self, mesh_order, meshop_name=None):
         """Assign a mesh level to objects.
 
@@ -278,7 +340,7 @@ class IcepakMesh(object):
 
         Returns
         -------
-        bool
+        list of :class:`pyaedt.modules.Mesh.MeshOperation`
             ``True`` when successful, ``False`` when failed.
 
         References
@@ -304,7 +366,51 @@ class IcepakMesh(object):
             list_meshops.append(meshop_name)
         return list_meshops
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
+    def assign_mesh_from_file(self, objects, filename, meshop_name=None):
+        """Assign a mesh from file to objects.
+
+        Parameters
+        ----------
+        objects : list
+            List of objects to which apply the mesh file.
+        filename :  str
+            Full path to .msh file.
+        meshop_name :  str, optional
+            Name of the mesh operations. Default is ``None``.
+
+        Returns
+        -------
+         :class:`pyaedt.modules.Mesh.MeshOperation`
+            Mesh Operation object. ``False`` when failed.
+
+        References
+        ----------
+
+        >>> oModule.AssignMeshOperation
+        """
+        objs = self._app.modeler.convert_to_selections(objects, True)
+        if meshop_name:
+            meshop_name = generate_unique_name("MeshFile")
+        else:
+            meshop_name = generate_unique_name("MeshFile")
+        props = OrderedDict({"Enable": True, "MaxLevel": str(0), "MinLevel": str(0), "Objects": objs})
+        props["Local Mesh Parameters Enabled"] = False
+        props["Mesh Reuse Enabled"] = True
+        props["Mesh Reuse File"] = filename
+        props["Local Mesh Parameters Type"] = "3DPolygon Local Mesh Parameters"
+        props["Height count"] = "0"
+        props["Top height"] = "0mm"
+        props["Top ratio"] = "0"
+        props["Bottom height"] = "0mm"
+        props["Bottom ratio"] = "0"
+        mop = MeshOperation(self, meshop_name, props, "Icepak")
+        if mop.create():
+            self.meshoperations.append(mop)
+            return mop
+        return False
+
+    @pyaedt_function_handler()
     def automatic_mesh_pcb(self, accuracy=2):
         """Create a custom mesh tailored on a PCB design.
 
@@ -342,7 +448,7 @@ class IcepakMesh(object):
         self.global_mesh_region.update()
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def automatic_mesh_3D(self, accuracy2, stairStep=True):
         """Create a generic custom mesh for a custom 3D object.
 
@@ -378,7 +484,7 @@ class IcepakMesh(object):
         self.global_mesh_region.update()
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def add_priority(self, entity_type, obj_list, comp_name=None, priority=3):
         """Add priority to objects.
 
@@ -440,7 +546,7 @@ class IcepakMesh(object):
         self.modeler.oeditor.UpdatePriorityList(args)
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def assign_mesh_region(self, objectlist=[], level=5, is_submodel=False, name=None):
         """Assign a predefined surface mesh level to an object.
 
@@ -473,21 +579,21 @@ class IcepakMesh(object):
         meshregion.Level = level
         meshregion.name = name
         if not objectlist:
-            objectlist = [i for i in self.modeler.primitives.object_names]
+            objectlist = [i for i in self.modeler.object_names]
         if is_submodel:
             meshregion.SubModels = objectlist
         else:
             meshregion.Objects = objectlist
-        all_objs = [i for i in self.modeler.primitives.object_names]
+        all_objs = [i for i in self.modeler.object_names]
         meshregion.create()
-        objectlist2 = self.modeler.primitives.object_names
+        objectlist2 = self.modeler.object_names
         added_obj = [i for i in objectlist2 if i not in all_objs]
         meshregion.Objects = added_obj
         meshregion.SubModels = None
         self.meshregions.append(meshregion)
         return meshregion
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def generate_mesh(self, name):
         """Generate the mesh for a given setup name.
 
@@ -508,7 +614,7 @@ class IcepakMesh(object):
         """
         return self._odesign.GenerateMesh(name) == 0
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def assign_mesh_level_to_group(
         self,
         mesh_level,

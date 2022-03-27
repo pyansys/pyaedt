@@ -1,10 +1,26 @@
+import json
 import os
-from pyaedt.generic.general_methods import aedt_exception_handler
-from pyaedt.modeler.Primitives import Primitives
-from pyaedt.modeler.GeometryOperators import GeometryOperators
-from pyaedt.modeler.multiparts import MultiPartComponent, Environment
-from pyaedt.modeler.actors import Person, Bird, Vehicle
+import random
+import string
+from math import asin
+from math import ceil
+from math import cos
+from math import degrees
+from math import pi
+from math import radians
+from math import sin
+from math import sqrt
+from math import tan
+
 from pyaedt.generic.general_methods import _retry_ntimes
+from pyaedt.generic.general_methods import pyaedt_function_handler
+from pyaedt.modeler.actors import Bird
+from pyaedt.modeler.actors import Person
+from pyaedt.modeler.actors import Vehicle
+from pyaedt.modeler.GeometryOperators import GeometryOperators
+from pyaedt.modeler.multiparts import Environment
+from pyaedt.modeler.multiparts import MultiPartComponent
+from pyaedt.modeler.Primitives import Primitives
 
 
 class Primitives3D(Primitives, object):
@@ -12,12 +28,12 @@ class Primitives3D(Primitives, object):
 
     This class is inherited in the caller application and is
     accessible through the primitives variable part of modeler object(
-    e.g. ``hfss.modeler.primitives`` or ``icepak.modeler.primitives``).
+    e.g. ``hfss.modeler`` or ``icepak.modeler``).
 
     Parameters
     ----------
-    modeler : str
-        Name of the modeler.
+    application : str
+        Name of the application.
 
     Examples
     --------
@@ -25,25 +41,64 @@ class Primitives3D(Primitives, object):
 
     >>> from pyaedt import Hfss
     >>> aedtapp = Hfss()
-    >>> prim = aedtapp.modeler.primitives
+    >>> prim = aedtapp.modeler
     """
 
-    def __init__(self, modeler):
-        Primitives.__init__(self, modeler)
+    def __init__(self):
+        Primitives.__init__(self)
         self.multiparts = []
 
-    @aedt_exception_handler
-    def is3d(self):
-        """Check if the analysis is a 3D type.
+    @pyaedt_function_handler()
+    def create_point(self, position, name=None, color="(143 175 143)"):
+        """Create a point.
+
+        Parameters
+        ----------
+        position : list
+            List of ``[x, y, z]`` coordinates. Note, The list can be empty or contain less than 3 elements.
+        name : str, optional
+            Name of the point. The default is ``None``, in which case the
+            default name is assigned.
+        color : str, optional
+            String exposing 3 int values such as "(value1 value2 value3)". Default value is ``"(143 175 143)"``.
 
         Returns
         -------
-        bool
-            ``True`` when successful, ``False`` when failed.
+        :class:`pyaedt.modeler.Object3d.Point`
+            Point object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateBox
+
+        Examples
+        --------
+
+        >>> from pyaedt import hfss
+        >>> hfss = Hfss()
+        >>> point_object = hfss.modeler.primivites.create_point([0,0,0], name="mypoint")
 
         """
+        x_position, y_position, z_position = self._pos_with_arg(position)
 
-    @aedt_exception_handler
+        if not name:
+            unique_name = "".join(random.sample(string.ascii_uppercase + string.digits, 6))
+            name = "NewPoint_" + unique_name
+
+        parameters = ["NAME:PointParameters"]
+        parameters.append("PointX:="), parameters.append(x_position)
+        parameters.append("PointY:="), parameters.append(y_position)
+        parameters.append("PointZ:="), parameters.append(z_position)
+
+        attributes = ["NAME:Attributes"]
+        attributes.append("Name:="), attributes.append(name)
+        attributes.append("Color:="), attributes.append(color)
+
+        point = _retry_ntimes(10, self._oeditor.CreatePoint, parameters, attributes)
+        return self._create_point(name)
+
+    @pyaedt_function_handler()
     def create_box(self, position, dimensions_list, name=None, matname=None):
         """Create a box.
 
@@ -75,11 +130,11 @@ class Primitives3D(Primitives, object):
         --------
 
         >>> from pyaedt import hfss
-        >>> hfss = HFSS()
+        >>> hfss = Hfss()
         >>> origin = [0,0,0]
         >>> dimensions = [10,5,20]
         >>> #Material and name are not mandatory fields
-        >>> object_id = hfss.modeler.primivites.create_box(origin, dimensions, name="mybox", matname="copper")
+        >>> box_object = hfss.modeler.primivites.create_box(origin, dimensions, name="mybox", matname="copper")
 
         """
         assert len(position) == 3, "Position Argument must be a valid 3 Element List"
@@ -97,7 +152,7 @@ class Primitives3D(Primitives, object):
         new_object_name = _retry_ntimes(10, self._oeditor.CreateBox, vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_cylinder(self, cs_axis, position, radius, height, numSides=0, name=None, matname=None):
         """Create a cylinder.
 
@@ -136,10 +191,14 @@ class Primitives3D(Primitives, object):
         --------
         >>> from pyaedt import Hfss
         >>> aedtapp = Hfss()
-        >>> ret_object = aedtapp.modeler.primitives.create_cylinder(cs_axis='Z', position=[0,0,0], radius=2, height=3,
-        ...                                                name="mycyl", matname="vacuum")
+        >>> cylinder_object = aedtapp.modeler..create_cylinder(cs_axis='Z', position=[0,0,0],
+        ...                                                   radius=2, height=3, name="mycyl",
+        ...                                                   matname="vacuum")
 
         """
+        if isinstance(radius, (int, float)) and radius < 0:
+            raise ValueError("Radius must be greater than 0.")
+
         szAxis = GeometryOperators.cs_axis_str(cs_axis)
         XCenter, YCenter, ZCenter = self._pos_with_arg(position)
 
@@ -153,14 +212,22 @@ class Primitives3D(Primitives, object):
         vArg1.append("Radius:="), vArg1.append(Radius)
         vArg1.append("Height:="), vArg1.append(Height)
         vArg1.append("WhichAxis:="), vArg1.append(szAxis)
-        vArg1.append("NumSides:="), vArg1.append('{}'.format(numSides))
+        vArg1.append("NumSides:="), vArg1.append("{}".format(numSides))
         vArg2 = self._default_object_attributes(name=name, matname=matname)
         new_object_name = self._oeditor.CreateCylinder(vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
-    def create_polyhedron(self, cs_axis=None, center_position=(0.0, 0.0, 0.0), start_position=(0.0, 1.0, 0.0),
-                          height=1.0, num_sides=12, name=None, matname=None):
+    @pyaedt_function_handler()
+    def create_polyhedron(
+        self,
+        cs_axis=None,
+        center_position=(0.0, 0.0, 0.0),
+        start_position=(0.0, 1.0, 0.0),
+        height=1.0,
+        num_sides=12,
+        name=None,
+        matname=None,
+    ):
         """Create a regular polyhedron.
 
         Parameters
@@ -199,9 +266,9 @@ class Primitives3D(Primitives, object):
         --------
         >>> from pyaedt import Hfss
         >>> aedtapp = Hfss()
-        >>> ret_obj = aedtapp.modeler.primitives.create_polyhedron(cs_axis='X', center_position=[0, 0, 0],
-        ...                                                        start_position=[0,5,0], height=0.5,
-        ...                                                        num_sides=8, name="mybox", matname="copper")
+        >>> ret_obj = aedtapp.modeler.create_polyhedron(cs_axis='X', center_position=[0, 0, 0],
+        ...                                             start_position=[0,5,0], height=0.5,
+        ...                                              num_sides=8, name="mybox", matname="copper")
 
         """
         test = cs_axis
@@ -225,13 +292,14 @@ class Primitives3D(Primitives, object):
         new_object_name = self._oeditor.CreateRegularPolyhedron(vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_cone(self, cs_axis, position, bottom_radius, top_radius, height, name=None, matname=None):
         """Create a cone.
 
         Parameters
         ----------
-        Axis of rotation of the starting point around the center point.
+        cs_axis : str
+            Axis of rotation of the starting point around the center point.
             The default is ``None``, in which case the Z axis is used.
         center_position : list, optional
             List of ``[x, y, z]`` coordinates for the center position
@@ -263,11 +331,20 @@ class Primitives3D(Primitives, object):
         --------
         >>> from pyaedt import Hfss
         >>> aedtapp = Hfss()
-        >>> ret_object = aedtapp.modeler.primitives.create_cone(cs_axis='Z', position=[0,0,0],
-        ...                                                    bottom_radius=2, top_radius=3, height=4,
-        ...                                                    name="mybox", matname="copper")
+        >>> cone_object = aedtapp.modeler.create_cone(cs_axis='Z', position=[0, 0, 0],
+        ...                                           bottom_radius=2, top_radius=3, height=4,
+        ...                                           name="mybox", matname="copper")
 
         """
+        if bottom_radius == top_radius:
+            raise ValueError("Bottom radius and top radius must have different values.")
+        if isinstance(bottom_radius, (int, float)) and bottom_radius < 0:
+            raise ValueError("Bottom radius must be greater than 0.")
+        if isinstance(top_radius, (int, float)) and top_radius < 0:
+            raise ValueError("Top radius must be greater than 0.")
+        if isinstance(height, (int, float)) and height <= 0:
+            raise ValueError("Height must be greater than 0.")
+
         XCenter, YCenter, ZCenter = self._pos_with_arg(position)
         szAxis = GeometryOperators.cs_axis_str(cs_axis)
         Height = self._arg_with_dim(height)
@@ -286,7 +363,7 @@ class Primitives3D(Primitives, object):
         new_object_name = self._oeditor.CreateCone(vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_sphere(self, position, radius, name=None, matname=None):
         """Create a sphere.
 
@@ -318,10 +395,15 @@ class Primitives3D(Primitives, object):
         --------
         >>> from pyaedt import Hfss
         >>> aedtapp = Hfss()
-        >>> ret_object = aedtapp.modeler.primitives.create_sphere(position=[0,0,0], radius=2,
-        ...                                                      name="mybox", matname="copper")
+        >>> ret_object = aedtapp.modeler.create_sphere(position=[0,0,0], radius=2,
+        ...                                            name="mysphere", matname="copper")
 
         """
+        if len(position) != 3:
+            raise ValueError("Position argument must be a valid 3 elements List.")
+        if isinstance(radius, (int, float)) and radius < 0:
+            raise ValueError("Radius must be greater than 0.")
+
         XCenter, YCenter, ZCenter = self._pos_with_arg(position)
 
         Radius = self._arg_with_dim(radius)
@@ -335,11 +417,89 @@ class Primitives3D(Primitives, object):
         new_object_name = self._oeditor.CreateSphere(vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
-    def create_bondwire(self, start_position, end_position, h1=0.2,
-                        h2=0, alpha=80, beta=5, bond_type=0,
-                        diameter=0.025, facets=6, name=None,
-                        matname=None):
+    @pyaedt_function_handler()
+    def create_torus(self, center, major_radius, minor_radius, axis=None, name=None, material_name=None):
+        """Create a torus.
+
+        Parameters
+        ----------
+        center : list
+            Center point for the torus in a list of ``[x, y, z]`` coordinates.
+        major_radius : float
+           Major radius of the torus.
+        minor_radius : float
+           Minor radius of the torus.
+        axis : str, optional
+            Axis of revolution.
+            The default is ``None``, in which case the Z axis is used.
+        name : str, optional
+            Name of the torus. The default is ``None``, in which case the
+            default name is assigned.
+        material_name : str, optional
+            Name of the material.  The default is ``None``, in which case the
+            default material is assigned. If the material name supplied is
+            invalid, the default material is assigned.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.Object3d.Object3d`
+            3D object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateTorus
+
+        Examples
+        --------
+        Create a torus named ``"mytorus"`` about the Z axis with a major
+        radius of 1, minor radius of 0.5, and a material of ``"copper"``.
+        >>> from pyaedt import Hfss
+        >>> hfss = Hfss()
+        >>> origin = [0, 0, 0]
+        >>> torus = hfss.modeler.create_torus(origin, major_radius=1,
+        ...                                   minor_radius=0.5, axis="Z",
+        ...                                    name="mytorus", material_name="copper")
+
+        """
+        if len(center) != 3:
+            raise ValueError("Center argument must be a valid 3 element sequence.")
+        # if major_radius <= 0 or minor_radius <= 0:
+        #     raise ValueError("Both major and minor radius must be greater than 0.")
+        # if minor_radius >= major_radius:
+        #     raise ValueError("Major radius must be greater than minor radius.")
+
+        x_center, y_center, z_center = self._pos_with_arg(center)
+        axis = GeometryOperators.cs_axis_str(axis)
+        major_radius = self._arg_with_dim(major_radius)
+        minor_radius = self._arg_with_dim(minor_radius)
+
+        first_argument = ["NAME:TorusParameters"]
+        first_argument.append("XCenter:="), first_argument.append(x_center)
+        first_argument.append("YCenter:="), first_argument.append(y_center)
+        first_argument.append("ZCenter:="), first_argument.append(z_center)
+        first_argument.append("MajorRadius:="), first_argument.append(major_radius)
+        first_argument.append("MinorRadius:="), first_argument.append(minor_radius)
+        first_argument.append("WhichAxis:="), first_argument.append(axis)
+        second_argument = self._default_object_attributes(name=name, matname=material_name)
+        new_object_name = _retry_ntimes(10, self._oeditor.CreateTorus, first_argument, second_argument)
+        return self._create_object(new_object_name)
+
+    @pyaedt_function_handler()
+    def create_bondwire(
+        self,
+        start_position,
+        end_position,
+        h1=0.2,
+        h2=0,
+        alpha=80,
+        beta=5,
+        bond_type=0,
+        diameter=0.025,
+        facets=6,
+        name=None,
+        matname=None,
+    ):
         """Create a bondwire.
 
         Parameters
@@ -351,7 +511,7 @@ class Primitives3D(Primitives, object):
             List of ``[x, y, z]`` coordinates for the ending position
             of the bond pad.
         h1 : float, optional
-            Height between the IC  die I/O pad and the top of the bondwire.
+            Height between the IC die I/O pad and the top of the bondwire.
             The default is ``0.2``.
         h2 : float, optional
             Height of the IC die I/O pad above the lead frame. The default
@@ -402,45 +562,45 @@ class Primitives3D(Primitives, object):
         >>> object_id = hfss.modeler.primivites.create_bondwire(origin, endpos,h1=0.5, h2=0.1, alpha=75, beta=4,
         ...                                                     bond_type=0, name="mybox", matname="copper")
         """
-        XPosition, YPosition, ZPosition = self._pos_with_arg(start_position)
-        if XPosition is None or YPosition is None or ZPosition is None:
+        x_position, y_position, z_position = self._pos_with_arg(start_position)
+        if x_position is None or y_position is None or z_position is None:
             raise AttributeError("Position Argument must be a valid 3 Element List")
-        XSize, YSize, ZSize = self._pos_with_arg(end_position)
-        if XSize is None or YSize is None or YSize is None:
+        x_length, y_length, z_length = self._pos_with_arg([n - m for m, n in zip(start_position, end_position)])
+        if x_length is None or y_length is None or z_length is None:
             raise AttributeError("Dimension Argument must be a valid 3 Element List")
         if bond_type == 0:
             bondwire = "JEDEC_5Points"
         elif bond_type == 1:
             bondwire = "JEDEC_4Points"
-
         elif bond_type == 2:
             bondwire = "LOW"
         else:
             self.logger.error("Wrong Profile Type")
             return False
-        vArg1 = ["NAME:BondwireParameters"]
-        vArg1.append("WireType:="), vArg1.append(bondwire)
-        vArg1.append("WireDiameter:="), vArg1.append(self._arg_with_dim(diameter))
-        vArg1.append("NumSides:="), vArg1.append(str(facets))
-        vArg1.append("XPadPos:="), vArg1.append(XPosition)
-        vArg1.append("YPadPos:="), vArg1.append(YPosition)
-        vArg1.append("ZPadPos:="), vArg1.append(ZPosition)
-        vArg1.append("XDir:="), vArg1.append(XSize)
-        vArg1.append("YDir:="), vArg1.append(YSize)
-        vArg1.append("ZDir:="), vArg1.append(ZSize)
-        vArg1.append("Distance:="), vArg1.append(
-            self._arg_with_dim(GeometryOperators.points_distance(start_position, end_position)))
-        vArg1.append("h1:="), vArg1.append(self._arg_with_dim(h1))
-        vArg1.append("h2:="), vArg1.append(self._arg_with_dim(h2))
-        vArg1.append("alpha:="), vArg1.append(self._arg_with_dim(alpha, "deg"))
-        vArg1.append("beta:="), vArg1.append(self._arg_with_dim(beta, "deg"))
-        vArg1.append("WhichAxis:="), vArg1.append("Z")
-        vArg1.append("ReverseDirection:="), vArg1.append(False)
-        vArg2 = self._default_object_attributes(name=name, matname=matname)
-        new_object_name = self._oeditor.CreateBondwire(vArg1, vArg2)
+        first_argument = ["NAME:BondwireParameters"]
+        first_argument.append("WireType:="), first_argument.append(bondwire)
+        first_argument.append("WireDiameter:="), first_argument.append(self._arg_with_dim(diameter))
+        first_argument.append("NumSides:="), first_argument.append(str(facets))
+        first_argument.append("XPadPos:="), first_argument.append(x_position)
+        first_argument.append("YPadPos:="), first_argument.append(y_position)
+        first_argument.append("ZPadPos:="), first_argument.append(z_position)
+        first_argument.append("XDir:="), first_argument.append(x_length)
+        first_argument.append("YDir:="), first_argument.append(y_length)
+        first_argument.append("ZDir:="), first_argument.append(z_length)
+        first_argument.append("Distance:="), first_argument.append(
+            self._arg_with_dim(GeometryOperators.points_distance(start_position, end_position))
+        )
+        first_argument.append("h1:="), first_argument.append(self._arg_with_dim(h1))
+        first_argument.append("h2:="), first_argument.append(self._arg_with_dim(h2))
+        first_argument.append("alpha:="), first_argument.append(self._arg_with_dim(alpha, "deg"))
+        first_argument.append("beta:="), first_argument.append(self._arg_with_dim(beta, "deg"))
+        first_argument.append("WhichAxis:="), first_argument.append("Z")
+        first_argument.append("ReverseDirection:="), first_argument.append(False)
+        second_argument = self._default_object_attributes(name=name, matname=matname)
+        new_object_name = self._oeditor.CreateBondwire(first_argument, second_argument)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_rectangle(self, csPlane, position, dimension_list, name=None, matname=None, is_covered=True):
         """Create a rectangle.
 
@@ -492,7 +652,7 @@ class Primitives3D(Primitives, object):
         new_object_name = self._oeditor.CreateRectangle(vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_circle(self, cs_plane, position, radius, numSides=0, is_covered=True, name=None, matname=None):
         """Create a circle.
 
@@ -535,13 +695,13 @@ class Primitives3D(Primitives, object):
         vArg1.append("ZCenter:="), vArg1.append(ZCenter)
         vArg1.append("Radius:="), vArg1.append(Radius)
         vArg1.append("WhichAxis:="), vArg1.append(szAxis)
-        vArg1.append("NumSegments:="), vArg1.append('{}'.format(numSides))
+        vArg1.append("NumSegments:="), vArg1.append("{}".format(numSides))
         vArg2 = self._default_object_attributes(name=name, matname=matname)
         new_object_name = self._oeditor.CreateCircle(vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
-    def create_ellipse(self, cs_plane, position, major_raidus, ratio, is_covered=True, name=None, matname=None):
+    @pyaedt_function_handler()
+    def create_ellipse(self, cs_plane, position, major_radius, ratio, is_covered=True, name=None, matname=None):
         """Create an ellipse.
 
         Parameters
@@ -551,7 +711,7 @@ class Primitives3D(Primitives, object):
             :class:`pyaedt.constants.PLANE` Enumerator can be used as input.
         position : list
             List of ``[x, y, z]`` coordinates for the center point of the ellipse.
-        major_raidus : float
+        major_radius : float
             Base radius of the ellipse.
         ratio : float
             Aspect ratio of the secondary radius to the base radius.
@@ -580,7 +740,7 @@ class Primitives3D(Primitives, object):
         szAxis = GeometryOperators.cs_plane_to_axis_str(cs_plane)
         XStart, YStart, ZStart = self._pos_with_arg(position)
 
-        MajorRadius = self._arg_with_dim(major_raidus)
+        MajorRadius = self._arg_with_dim(major_radius)
         Ratio = self._arg_with_dim(ratio)
 
         vArg1 = ["NAME:EllipseParameters"]
@@ -595,11 +755,24 @@ class Primitives3D(Primitives, object):
         new_object_name = self._oeditor.CreateEllipse(vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
-    def create_equationbased_curve(self, x_t=0, y_t=0, z_t=0, t_start=0, t_end=1, num_points=0,
-                                   name=None, xsection_type=None, xsection_orient=None,
-                                   xsection_width=1, xsection_topwidth=1, xsection_height=1, xsection_num_seg=0,
-                                   xsection_bend_type=None):
+    @pyaedt_function_handler()
+    def create_equationbased_curve(
+        self,
+        x_t=0,
+        y_t=0,
+        z_t=0,
+        t_start=0,
+        t_end=1,
+        num_points=0,
+        name=None,
+        xsection_type=None,
+        xsection_orient=None,
+        xsection_width=1,
+        xsection_topwidth=1,
+        xsection_height=1,
+        xsection_num_seg=0,
+        xsection_bend_type=None,
+    ):
         """Create an equation-based curve.
 
         Parameters
@@ -657,34 +830,74 @@ class Primitives3D(Primitives, object):
         >>> oEditor.CreateEquationCurve
 
         """
-        x_section = self._crosssection_arguments(type=xsection_type, orient=xsection_orient, width=xsection_width,
-                                                 topwidth=xsection_topwidth, height=xsection_height,
-                                                 num_seg=xsection_num_seg,
-                                                 bend_type=xsection_bend_type)
+        x_section = self._crosssection_arguments(
+            type=xsection_type,
+            orient=xsection_orient,
+            width=xsection_width,
+            topwidth=xsection_topwidth,
+            height=xsection_height,
+            num_seg=xsection_num_seg,
+            bend_type=xsection_bend_type,
+        )
 
-        vArg1 = ["NAME:EquationBasedCurveParameters",
-                 "XtFunction:=", str(x_t),
-                 "YtFunction:=", str(y_t),
-                 "ZtFunction:=", str(z_t),
-                 "tStart:=", str(t_start),
-                 "tEnd:=", str(t_end),
-                 "NumOfPointsOnCurve:=", num_points,
-                 "Version:=", 1,
-                 x_section]
+        vArg1 = [
+            "NAME:EquationBasedCurveParameters",
+            "XtFunction:=",
+            str(x_t),
+            "YtFunction:=",
+            str(y_t),
+            "ZtFunction:=",
+            str(z_t),
+            "tStart:=",
+            str(t_start),
+            "tEnd:=",
+            str(t_end),
+            "NumOfPointsOnCurve:=",
+            num_points,
+            "Version:=",
+            1,
+            x_section,
+        ]
 
         vArg2 = self._default_object_attributes(name)
 
         new_name = self._oeditor.CreateEquationCurve(vArg1, vArg2)
         return self._create_object(new_name)
 
-    @aedt_exception_handler
-    def create_helix(self, udphelixdefinition):
-        """Create an helix.
+    @pyaedt_function_handler()
+    def create_helix(
+        self,
+        polyline_name,
+        position,
+        x_start_dir,
+        y_start_dir,
+        z_start_dir,
+        num_thread=1,
+        right_hand=True,
+        radius_increment=0.0,
+        thread=1,
+    ):
+        """Create an helix from a polyline.
 
         Parameters
         ----------
-        udphelixdefinition :
-
+        polyline_name : str
+            Name of the polyline used as the base for the helix.
+        position : list
+            List of ``[x, y, z]`` coordinates for the center point of the circle.
+        x_start_dir : float
+            Distance along x axis from the polyline.
+        y_start_dir : float
+            Distance along y axis from the polyline.
+        z_start_dir : float
+            Distance along z axis from the polyline.
+        num_thread : int, optional
+            Number of turns. The default value is ``1``.
+        right_hand : bool, optional
+            Whether the helix turning direction is right hand. The default value is ``True``.
+        radius_increment : float, optional
+            Radius change per turn. The default value is ``0.0``.
+        thread : float
 
         Returns
         -------
@@ -697,16 +910,41 @@ class Primitives3D(Primitives, object):
         >>> oEditor.CreateHelix
 
         """
-        vArg1 = ["NAME:Selections"]
-        vArg1.append("Selections:="), vArg1.append(o.name)
-        vArg1.append("NewPartsModelFlag:="), vArg1.append('Model')
+        if not polyline_name or polyline_name == "":
+            raise ValueError("The name of the polyline cannot be an empty string.")
 
-        vArg2 = udphelixdefinition.toScript(self.model_units)
+        x_center, y_center, z_center = self._pos_with_arg(position)
+
+        vArg1 = ["NAME:Selections"]
+        vArg1.append("Selections:="), vArg1.append(polyline_name)
+        vArg1.append("NewPartsModelFlag:="), vArg1.append("Model")
+
+        vArg2 = ["NAME:HelixParameters"]
+        vArg2.append("XCenter:=")
+        vArg2.append(x_center)
+        vArg2.append("YCenter:=")
+        vArg2.append(y_center)
+        vArg2.append("ZCenter:=")
+        vArg2.append(z_center)
+        vArg2.append("XStartDir:=")
+        vArg2.append(self._arg_with_dim(x_start_dir))
+        vArg2.append("YStartDir:=")
+        vArg2.append(self._arg_with_dim(y_start_dir))
+        vArg2.append("ZStartDir:=")
+        vArg2.append(self._arg_with_dim(z_start_dir))
+        vArg2.append("NumThread:=")
+        vArg2.append(num_thread)
+        vArg2.append("RightHand:=")
+        vArg2.append(right_hand)
+        vArg2.append("RadiusIncrement:=")
+        vArg2.append(self._arg_with_dim(radius_increment))
+        vArg2.append("Thread:=")
+        vArg2.append(self._arg_with_dim(thread))
 
         new_name = self._oeditor.CreateHelix(vArg1, vArg2)
         return self._create_object(new_name)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def convert_segments_to_line(self, object_name):
         """Convert a CreatePolyline list of segments to lines.
 
@@ -736,23 +974,15 @@ class Primitives3D(Primitives, object):
                     "NAME:AllTabs",
                     [
                         "NAME:Geometry3DPolylineTab",
-                        [
-                            "NAME:PropServers",
-                            this_object.name + ":CreatePolyline:1:Segment" + str(i)
-                        ],
-                        [
-                            "NAME:ChangedProps",
-                            [
-                                "NAME:Segment Type",
-                                "Value:=", "Line"
-                            ]
-                        ]
-                    ]
-                ])
+                        ["NAME:PropServers", this_object.name + ":CreatePolyline:1:Segment" + str(i)],
+                        ["NAME:ChangedProps", ["NAME:Segment Type", "Value:=", "Line"]],
+                    ],
+                ]
+            )
         return True
 
-    @aedt_exception_handler
-    def create_udm(self, udmfullname, udm_params_list, udm_library='syslib'):
+    @pyaedt_function_handler()
+    def create_udm(self, udmfullname, udm_params_list, udm_library="syslib"):
         """Create a user-defined model.
 
         Parameters
@@ -787,14 +1017,28 @@ class Primitives3D(Primitives, object):
                 val = pair.Value
             if isinstance(val, int):
                 vArgParamVector.append(
-                    ["NAME:UDMParam", "Name:=", name, "Value:=", str(val), "PropType2:=", 3, "PropFlag2:=", 2])
-            elif str(val)[0] in '0123456789':
+                    ["NAME:UDMParam", "Name:=", name, "Value:=", str(val), "PropType2:=", 3, "PropFlag2:=", 2]
+                )
+            elif str(val)[0] in "0123456789":
                 vArgParamVector.append(
-                    ["NAME:UDMParam", "Name:=", name, "Value:=", str(val), "PropType2:=", 3, "PropFlag2:=", 4])
+                    ["NAME:UDMParam", "Name:=", name, "Value:=", str(val), "PropType2:=", 3, "PropFlag2:=", 4]
+                )
             else:
                 vArgParamVector.append(
-                    ["NAME:UDMParam", "Name:=", name, "Value:=", str(val), "DataType:=", "String", "PropType2:=", 1,
-                     "PropFlag2:=", 0])
+                    [
+                        "NAME:UDMParam",
+                        "Name:=",
+                        name,
+                        "Value:=",
+                        str(val),
+                        "DataType:=",
+                        "String",
+                        "PropType2:=",
+                        1,
+                        "PropFlag2:=",
+                        0,
+                    ]
+                )
 
         vArg1.append(vArgParamVector)
         vArg1.append("DllName:=")
@@ -814,8 +1058,78 @@ class Primitives3D(Primitives, object):
         else:
             return False
 
-    @aedt_exception_handler
-    def insert_3d_component(self, compFile, geoParams=None, szMatParams='', szDesignParams='', targetCS='Global'):
+    @pyaedt_function_handler()
+    def create_spiral(
+        self,
+        internal_radius=10,
+        spacing=1,
+        faces=8,
+        turns=10,
+        width=2,
+        thickness=1,
+        elevation=0,
+        material="copper",
+        name=None,
+    ):
+        """Create a spiral inductor from a polyline.
+
+        Parameters
+        ----------
+        internal_radius : float, optional
+            Internal starting point of spiral. Default is `10`.
+        spacing : float, optional
+            Internal pitch between two turns. Default is `1`.
+        faces : int, optional
+            Number of faces per turn. Default is `8` as an octagon.
+        turns : int, optional
+            Number of turns. Default is `10`.
+        width : float, optional
+            Spiral width. Default is `2`.
+        thickness : float, optional
+            Spiral thickness. Default is `1`.
+        elevation : float, optional
+            Spiral elevation. Default is`0`.
+        material : str, optional
+            Spiral material. Default is `"copper"`.
+        name : str, optional
+            Spiral name. Default is `None`.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.Object3d.Polyline`
+            Polyline object.
+        """
+        assert internal_radius > 0, "Internal Radius must be greater than 0."
+        assert faces > 0, "Faces must be greater than 0."
+        dtheta = 2 * pi / faces
+        theta = pi / 2
+        pts = [(internal_radius, 0, elevation), (internal_radius, internal_radius * tan(dtheta / 2), elevation)]
+        rin = internal_radius * tan(dtheta / 2) * 2
+        x = rin
+        r = rin
+        for i in range(faces):
+            r += 1
+            theta += dtheta
+            x = x + r * cos(theta)
+            dr = (width + spacing) / (x - rin)
+
+        for i in range(turns * faces - int(faces / 2) - 1):
+            rin += dr
+            theta += dtheta
+            x0, y0 = pts[-1][:2]
+            x1, y1 = x0 + rin * cos(theta), y0 + rin * sin(theta)
+            pts.append((x1, y1, elevation))
+
+        pts.append((x1, 0, elevation))
+        p1 = self.create_polyline(
+            pts, xsection_type="Rectangle", xsection_width=width, xsection_height=thickness, matname=material
+        )
+        if name:
+            p1.name = name
+        return p1
+
+    @pyaedt_function_handler()
+    def insert_3d_component(self, compFile, geoParams=None, szMatParams="", szDesignParams="", targetCS="Global"):
         """Insert a new 3D component.
 
         Parameters
@@ -871,7 +1185,7 @@ class Primitives3D(Primitives, object):
         self.refresh_all_ids()
         return new_object_name
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_3d_component_object_list(self, componentname):
         """Retrieve all objects belonging to a 3D component.
 
@@ -898,27 +1212,37 @@ class Primitives3D(Primitives, object):
             self.logger.warning("Object Oriented Beta Option is not enabled in this Desktop.")
         return []
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _check_actor_folder(self, actor_folder):
         if not os.path.exists(actor_folder):
             self.logger.error("Folder {} does not exist.".format(actor_folder))
             return False
-        if not any(fname.endswith('.json') for fname in os.listdir(actor_folder)) or not any(
-                fname.endswith('.a3dcomp') for fname in os.listdir(actor_folder)):
+        if not any(fname.endswith(".json") for fname in os.listdir(actor_folder)) or not any(
+            fname.endswith(".a3dcomp") for fname in os.listdir(actor_folder)
+        ):
             self.logger.error("At least one json and one a3dcomp file is needed.")
             return False
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _initialize_multipart(self):
         if MultiPartComponent._t in self._app._variable_manager.independent_variable_names:
             return True
         else:
             return MultiPartComponent.start(self._app)
 
-    @aedt_exception_handler
-    def add_person(self, actor_folder, speed=0.0, global_offset=[0, 0, 0], yaw=0, pitch=0, roll=0,
-                   relative_cs_name=None, actor_name=None):
+    @pyaedt_function_handler()
+    def add_person(
+        self,
+        actor_folder,
+        speed=0.0,
+        global_offset=[0, 0, 0],
+        yaw=0,
+        pitch=0,
+        roll=0,
+        relative_cs_name=None,
+        actor_name=None,
+    ):
         """Add a Walking Person Multipart from 3D Components.
 
         It requires a json file in the folder containing person
@@ -1015,9 +1339,18 @@ class Primitives3D(Primitives, object):
         self.multiparts.append(person1)
         return person1
 
-    @aedt_exception_handler
-    def add_vehicle(self, actor_folder, speed=0, global_offset=[0, 0, 0], yaw=0, pitch=0, roll=0, relative_cs_name=None,
-                    actor_name=None):
+    @pyaedt_function_handler()
+    def add_vehicle(
+        self,
+        actor_folder,
+        speed=0,
+        global_offset=[0, 0, 0],
+        yaw=0,
+        pitch=0,
+        roll=0,
+        relative_cs_name=None,
+        actor_name=None,
+    ):
         """Add a Moving Vehicle Multipart from 3D Components.
 
         It requires a json file in the folder containing vehicle
@@ -1096,9 +1429,19 @@ class Primitives3D(Primitives, object):
         self.multiparts.append(vehicle)
         return vehicle
 
-    @aedt_exception_handler
-    def add_bird(self, actor_folder, speed=0, global_offset=[0, 0, 0], yaw=0, pitch=0,
-                 roll=0, flapping_rate=50, relative_cs_name=None, actor_name=None):
+    @pyaedt_function_handler()
+    def add_bird(
+        self,
+        actor_folder,
+        speed=0,
+        global_offset=[0, 0, 0],
+        yaw=0,
+        pitch=0,
+        roll=0,
+        flapping_rate=50,
+        relative_cs_name=None,
+        actor_name=None,
+    ):
         """Add a Bird Multipart from 3D Components.
 
         It requires a json file in the folder containing bird infos. An example json file is showed here.
@@ -1179,15 +1522,19 @@ class Primitives3D(Primitives, object):
         >>> from pyaedt import Hfss
         >>> app = Hfss()
         >>> bird_dir = "path/to/bird/directory"
-        >>> bird1 = app.modeler.primitives.add_bird(bird_dir, 1.0, [19, 4, 3], 120, -5, flapping_rate=30)
+        >>> bird1 = app.modeler.add_bird(bird_dir, 1.0, [19, 4, 3], 120, -5, flapping_rate=30)
 
         """
         self._initialize_multipart()
 
         if not self._check_actor_folder(actor_folder):
             return False
-        bird = Bird(actor_folder, speed=speed, flapping_rate=self._arg_with_dim(flapping_rate, "Hz"),
-                    relative_cs_name=relative_cs_name)
+        bird = Bird(
+            actor_folder,
+            speed=speed,
+            flapping_rate=self._arg_with_dim(flapping_rate, "Hz"),
+            relative_cs_name=relative_cs_name,
+        )
         if actor_name:
             bird._name = actor_name
         bird.offset = global_offset
@@ -1198,9 +1545,10 @@ class Primitives3D(Primitives, object):
         self.multiparts.append(bird)
         return bird
 
-    @aedt_exception_handler
-    def add_environment(self, env_folder, global_offset=[0, 0, 0], yaw=0, pitch=0, roll=0, relative_cs_name=None,
-                        environment_name=None):
+    @pyaedt_function_handler()
+    def add_environment(
+        self, env_folder, global_offset=[0, 0, 0], yaw=0, pitch=0, roll=0, relative_cs_name=None, environment_name=None
+    ):
         """Add an Environment Multipart Component from Json file.
 
          .. code-block:: json
@@ -1263,3 +1611,1015 @@ class Primitives3D(Primitives, object):
         environment.insert(self._app)
         self.multiparts.append(environment)
         return environment
+
+    @pyaedt_function_handler()
+    def create_choke(self, json_file):
+        """Create a chock from json setting file.
+
+        Parameters
+        ----------
+        json_file : str
+            Full path of the json file return for the function check_choke_values.
+
+        Returns
+        -------
+        List of
+            bool
+                ``True`` when successful, ``False`` when failed.
+            :class:`pyaedt.modeler.Object3d.Object3d`
+                3D object core.
+            list of
+                :class:`pyaedt.modeler.Object3d.Object3d`
+                    3D object winding.
+                list
+                    list of point coordinates of the winding.
+            for each winding.
+        [bool, core_obj, [first_winding_obj, first_winding_point_list],
+         [second_winding_obj, second_winding_point_list], etc...]
+
+        Examples
+        --------
+        Json file has to be like the following example.
+
+        >>> from pyaedt import Hfss
+        >>> hfss = Hfss()
+        >>> dictionary_values = hfss.modeler.check_choke_values("C:/Example/Of/Path/myJsonFile.json")
+        >>> mychoke = hfss.modeler.create_choke("C:/Example/Of/Path/myJsonFile_Corrected.json")
+        """
+        with open(json_file, "r") as read_file:
+            values = json.load(read_file)
+        self.logger.info("CHOKE INFO: " + str(values))
+
+        security_factor = 1.1
+        sr = security_factor
+        segment_number = 0
+        if values["Wire Section"]["Hexagon"]:
+            segment_number = 6
+            section = "Circle"
+        elif values["Wire Section"]["Octagon"]:
+            segment_number = 8
+            section = "Circle"
+        elif values["Wire Section"]["Circle"]:
+            section = "Circle"
+        else:
+            section = None
+        sep_layer = values["Layer Type"]["Separate"]
+
+        name_core = values["Core"]["Name"]
+        material_core = values["Core"]["Material"]
+        in_rad_core = values["Core"]["Inner Radius"]
+        out_rad_core = values["Core"]["Outer Radius"]
+        height_core = values["Core"]["Height"]
+        chamfer = values["Core"]["Chamfer"]
+
+        name_wind = values["Outer Winding"]["Name"]
+        material_wind = values["Outer Winding"]["Material"]
+        in_rad_wind = values["Outer Winding"]["Inner Radius"]
+        out_rad_wind = values["Outer Winding"]["Outer Radius"]
+        height_wind = values["Outer Winding"]["Height"]
+        w_dia = values["Outer Winding"]["Wire Diameter"]
+        turns = values["Outer Winding"]["Turns"]
+        turns2 = values["Mid Winding"]["Turns"]
+        turns3 = values["Inner Winding"]["Turns"]
+        teta = values["Outer Winding"]["Coil Pit(deg)"]
+        teta2 = values["Mid Winding"]["Coil Pit(deg)"]
+        teta3 = values["Inner Winding"]["Coil Pit(deg)"]
+
+        chamf = self._make_winding_follow_chamfer(chamfer, sr, w_dia, 1)
+
+        returned_list = [
+            self._make_core(name_core, material_core, in_rad_core, out_rad_core, height_core, chamfer),
+        ]
+
+        if values["Layer"]["Double"]:
+            if values["Layer Type"]["Linked"]:
+                list_object = self._make_double_linked_winding(
+                    name_wind,
+                    material_wind,
+                    in_rad_wind,
+                    out_rad_wind,
+                    height_wind,
+                    w_dia,
+                    teta,
+                    teta2,
+                    turns,
+                    turns2,
+                    chamfer,
+                    chamf,
+                    sr,
+                )
+                print("make_double_linked_winding")
+            else:
+                list_object = self._make_double_winding(
+                    name_wind,
+                    material_wind,
+                    in_rad_wind,
+                    out_rad_wind,
+                    height_wind,
+                    w_dia,
+                    teta,
+                    teta2,
+                    turns,
+                    turns2,
+                    chamfer,
+                    chamf,
+                    sr,
+                    sep_layer,
+                )
+                print("make_double_winding")
+        elif values["Layer"]["Triple"]:
+            if values["Layer Type"]["Linked"]:
+                list_object = self._make_triple_linked_winding(
+                    name_wind,
+                    material_wind,
+                    in_rad_wind,
+                    out_rad_wind,
+                    height_wind,
+                    w_dia,
+                    teta,
+                    teta2,
+                    teta3,
+                    turns,
+                    turns2,
+                    turns3,
+                    chamfer,
+                    chamf,
+                    sr,
+                )
+                print("make_triple_linked_winding")
+            else:
+                list_object = self._make_triple_winding(
+                    name_wind,
+                    material_wind,
+                    in_rad_wind,
+                    out_rad_wind,
+                    height_wind,
+                    w_dia,
+                    teta,
+                    teta2,
+                    teta3,
+                    turns,
+                    turns2,
+                    turns3,
+                    chamfer,
+                    chamf,
+                    sr,
+                    sep_layer,
+                )
+                print("make_triple_winding")
+        else:
+            list_object = self._make_winding(
+                name_wind, material_wind, in_rad_wind, out_rad_wind, height_wind, teta, turns, chamf, sep_layer
+            )
+            print("make_winding")
+        list_duplicated_object = []
+        if type(list_object[0]) == list:
+            for i in range(len(list_object)):
+                success = list_object[i][0].set_crosssection_properties(
+                    type=section, width=w_dia, num_seg=segment_number
+                )
+            returned_list = returned_list + list_object
+        else:
+            success = list_object[0].set_crosssection_properties(type=section, width=w_dia, num_seg=segment_number)
+            returned_list.append(list_object)
+
+        for key in values["Number of Windings"].keys():
+            if values["Number of Windings"][key]:
+                number_duplication = int(key)
+        if number_duplication >= 2:
+            if values["Mode"]["Common"] and number_duplication == 2:
+                if type(list_object[0]) == list:
+                    for i in range(len(list_object)):
+                        duplication = self.create_polyline(
+                            position_list=list_object[i][1], name=name_wind, matname=material_wind
+                        )
+                        duplication.mirror([0, 0, 0], [-1, 0, 0])
+                        duplication_points = self.get_vertices_of_line(duplication.name)
+                        success = duplication.set_crosssection_properties(
+                            type=section, width=w_dia, num_seg=segment_number
+                        )
+                        list_duplicated_object.append([duplication, duplication_points])
+
+                else:
+                    duplication = self.create_polyline(
+                        position_list=list_object[1], name=name_wind, matname=material_wind
+                    )
+                    duplication.mirror([0, 0, 0], [-1, 0, 0])
+                    duplication_points = self.get_vertices_of_line(duplication.name)
+                    success = duplication.set_crosssection_properties(type=section, width=w_dia, num_seg=segment_number)
+                    list_duplicated_object.append([duplication, duplication_points])
+            else:
+                if type(list_object[0]) == list:
+                    for j in range(number_duplication - 1):
+                        for i in range(len(list_object)):
+                            duplication = self.create_polyline(
+                                position_list=list_object[i][1], name=name_wind, matname=material_wind
+                            )
+                            duplication.rotate("Z", (j + 1) * 360 / number_duplication)
+                            duplication_points = self.get_vertices_of_line(duplication.name)
+                            success = duplication.set_crosssection_properties(
+                                type=section, width=w_dia, num_seg=segment_number
+                            )
+                            list_duplicated_object.append([duplication, duplication_points])
+                else:
+                    for j in range(number_duplication - 1):
+                        duplication = self.create_polyline(
+                            position_list=list_object[1], name=name_wind, matname=material_wind
+                        )
+                        duplication.rotate("Z", (j + 1) * 360 / number_duplication)
+                        duplication_points = self.get_vertices_of_line(duplication.name)
+                        success = duplication.set_crosssection_properties(
+                            type=section, width=w_dia, num_seg=segment_number
+                        )
+                        list_duplicated_object.append([duplication, duplication_points])
+            returned_list = returned_list + list_duplicated_object
+
+        returned_list.insert(0, success)
+        return returned_list
+
+    @pyaedt_function_handler()
+    def _make_winding(self, name, material, in_rad, out_rad, height, teta, turns, chamf, sep_layer):
+
+        teta_r = radians(teta)
+        points_list1 = [
+            [in_rad * cos(teta_r), -in_rad * sin(teta_r), height / 2 - chamf],
+            [(in_rad + chamf) * cos(teta_r), -(in_rad + chamf) * sin(teta_r), height / 2],
+            [out_rad - chamf, 0, height / 2],
+            [out_rad, 0, height / 2 - chamf],
+            [out_rad, 0, -height / 2 + chamf],
+            [out_rad - chamf, 0, -height / 2],
+            [(in_rad + chamf) * cos(teta_r), (in_rad + chamf) * sin(teta_r), -height / 2],
+            [in_rad * cos(teta_r), in_rad * sin(teta_r), -height / 2 + chamf],
+            [in_rad * cos(teta_r), in_rad * sin(teta_r), height / 2 - chamf],
+        ]
+        polyline = self.create_polyline(position_list=points_list1, name=name, matname=material)
+        union_polyline1 = [polyline.name]
+        if turns > 1:
+            union_polyline2 = polyline.duplicate_around_axis(
+                cs_axis="Z", angle=2 * teta, nclones=turns, create_new_objects=True
+            )
+        else:
+            union_polyline2 = []
+        union_polyline = union_polyline1 + union_polyline2
+        list_positions = []
+        for i in range(len(union_polyline)):
+            list_positions = list_positions + self.get_vertices_of_line(union_polyline[i])
+        self.delete(union_polyline)
+
+        if sep_layer:
+            for i in range(4):
+                list_positions.pop()
+            list_positions.insert(0, [list_positions[0][0], list_positions[0][1], -height])
+            list_positions.append([list_positions[-1][0], list_positions[-1][1], -height])
+            true_polyline = self.create_polyline(position_list=list_positions, name=name, matname=material)
+            true_polyline.rotate("Z", 180 - (turns - 1) * teta)
+            list_positions = self.get_vertices_of_line(true_polyline.name)
+            return [true_polyline, list_positions]
+
+        return list_positions
+
+    @pyaedt_function_handler()
+    def _make_double_linked_winding(
+        self,
+        name,
+        material,
+        in_rad,
+        out_rad,
+        height,
+        w_dia,
+        teta,
+        teta_in_wind,
+        turns,
+        turns_in_wind,
+        chamfer,
+        chamf_in_wind,
+        sr,
+    ):
+        list_object = self._make_double_winding(
+            name,
+            material,
+            in_rad,
+            out_rad,
+            height,
+            w_dia,
+            teta,
+            teta_in_wind,
+            turns,
+            turns_in_wind,
+            chamfer,
+            chamf_in_wind,
+            sr,
+            False,
+        )
+        points_out_wind = list_object[0]
+        points_in_wind = list_object[1]
+        for i in range(2):
+            points_out_wind.pop(0)
+            points_out_wind.pop()
+        points_out_wind.pop()
+        points_out_wind[-1] = [points_out_wind[-2][0], points_out_wind[-2][1], -height]
+        points_in_wind.insert(0, [points_in_wind[0][0], points_in_wind[0][1], -height])
+        points_in_wind[-1] = [points_in_wind[-2][0], points_in_wind[-2][1], points_out_wind[1][2]]
+        points_in_wind.append([points_in_wind[-3][0], points_in_wind[-3][1], points_out_wind[0][2]])
+
+        outer_polyline = self.create_polyline(position_list=points_out_wind, name=name, matname=material)
+        outer_polyline.rotate("Z", 180 - (turns - 1) * teta)
+        inner_polyline = self.create_polyline(position_list=points_in_wind, name=name, matname=material)
+        inner_polyline.rotate("Z", 180 - (turns_in_wind - 1) * teta_in_wind)
+        outer_polyline.mirror([0, 0, 0], [0, -1, 0])
+        outer_polyline.rotate("Z", turns_in_wind * teta_in_wind - turns * teta)
+
+        list_polyline = [inner_polyline.name, outer_polyline.name]
+        list_positions = []
+        for i in range(len(list_polyline)):
+            list_positions = list_positions + self.get_vertices_of_line(list_polyline[i])
+        self.delete(list_polyline)
+        true_polyline = self.create_polyline(position_list=list_positions, name=name, matname=material)
+        return [true_polyline, list_positions]
+
+    @pyaedt_function_handler()
+    def _make_triple_linked_winding(
+        self,
+        name,
+        material,
+        in_rad,
+        out_rad,
+        height,
+        w_dia,
+        teta,
+        teta_mid_wind,
+        teta_in_wind,
+        turns,
+        turns_mid_wind,
+        turns_in_wind,
+        chamfer,
+        chamf_in_wind,
+        sr,
+    ):
+        list_object = self._make_triple_winding(
+            name,
+            material,
+            in_rad,
+            out_rad,
+            height,
+            w_dia,
+            teta,
+            teta_mid_wind,
+            teta_in_wind,
+            turns + 1,
+            turns_mid_wind,
+            turns_in_wind,
+            chamfer,
+            chamf_in_wind,
+            sr,
+            False,
+        )
+        points_out_wind = list_object[0]
+        points_mid_wind = list_object[1]
+        points_in_wind = list_object[2]
+        for i in range(3):
+            points_out_wind.pop(0)
+            points_out_wind.pop(0)
+            points_out_wind.pop()
+        points_out_wind[-1] = [points_out_wind[-2][0], points_out_wind[-2][1], -height]
+        for i in range(2):
+            points_mid_wind.pop(0)
+            points_mid_wind.pop()
+        points_mid_wind.pop()
+        points_mid_wind[-1] = [points_mid_wind[-2][0], points_mid_wind[-2][1], points_out_wind[1][2]]
+        points_mid_wind.append([points_mid_wind[-4][0], points_mid_wind[-4][1], points_out_wind[0][2]])
+        points_in_wind.insert(0, [points_in_wind[0][0], points_in_wind[0][1], -height])
+        points_in_wind[-1] = [points_in_wind[-2][0], points_in_wind[-2][1], points_mid_wind[1][2]]
+        points_in_wind.append([points_in_wind[-3][0], points_in_wind[-3][1], points_mid_wind[0][2]])
+
+        outer_polyline = self.create_polyline(position_list=points_out_wind, name=name, matname=material)
+        outer_polyline.rotate("Z", 180 - (turns - 1) * teta)
+        mid_polyline = self.create_polyline(position_list=points_mid_wind, name=name, matname=material)
+        mid_polyline.rotate("Z", 180 - (turns_mid_wind - 1) * teta_mid_wind)
+        inner_polyline = self.create_polyline(position_list=points_in_wind, name=name, matname=material)
+
+        inner_polyline.rotate("Z", 180 - (turns_in_wind - 1) * teta_in_wind)
+        mid_polyline.mirror([0, 0, 0], [0, -1, 0])
+        outer_polyline.rotate("Z", turns * teta - turns_mid_wind * teta_mid_wind)
+        mid_polyline.rotate("Z", turns_in_wind * teta_in_wind - turns_mid_wind * teta_mid_wind)
+        outer_polyline.rotate("Z", turns_in_wind * teta_in_wind - turns_mid_wind * teta_mid_wind)
+
+        list_polyline = [inner_polyline.name, mid_polyline.name, outer_polyline.name]
+        list_positions = []
+        for i in range(len(list_polyline)):
+            list_positions = list_positions + self.get_vertices_of_line(list_polyline[i])
+        self.primitives.delete(list_polyline)
+        true_polyline = self.create_polyline(position_list=list_positions, name=name, matname=material)
+        return [true_polyline, list_positions]
+
+    @pyaedt_function_handler()
+    def _make_double_winding(
+        self,
+        name,
+        material,
+        in_rad,
+        out_rad,
+        height,
+        w_dia,
+        teta,
+        teta_in_wind,
+        turns,
+        turns_in_wind,
+        chamfer,
+        chamf_in_wind,
+        sr,
+        sep_layer,
+    ):
+
+        chamf = self._make_winding_follow_chamfer(chamfer, sr, w_dia, 3)
+        in_rad_in_wind = in_rad + sr * w_dia
+        out_rad_in_wind = out_rad - sr * w_dia
+        height_in_wind = height - 2 * sr * w_dia
+        list_object = [
+            self._make_winding(name, material, in_rad, out_rad, height, teta, turns, chamf, sep_layer),
+            self._make_winding(
+                name,
+                material,
+                in_rad_in_wind,
+                out_rad_in_wind,
+                height_in_wind,
+                teta_in_wind,
+                turns_in_wind,
+                chamf_in_wind,
+                sep_layer,
+            ),
+        ]
+        return list_object
+
+    @pyaedt_function_handler()
+    def _make_triple_winding(
+        self,
+        name,
+        material,
+        in_rad,
+        out_rad,
+        height,
+        w_dia,
+        teta,
+        teta_mid_wind,
+        teta_in_wind,
+        turns,
+        turns_mid_wind,
+        turns_in_wind,
+        chamfer,
+        chamf_in_wind,
+        sr,
+        sep_layer,
+    ):
+
+        chamf = self._make_winding_follow_chamfer(chamfer, sr, w_dia, 5)
+        chamf_mid_wind = self._make_winding_follow_chamfer(chamfer, sr, w_dia, 3)
+        in_rad_in_wind = in_rad + 2 * sr * w_dia
+        in_rad_mid_wind = in_rad + sr * w_dia
+        out_rad_in_wind = out_rad - 2 * sr * w_dia
+        out_rad_mid_wind = out_rad - sr * w_dia
+        height_in_wind = height - 4 * sr * w_dia
+        height_mid_wind = height - 2 * sr * w_dia
+        list_object = [
+            self._make_winding(name, material, in_rad, out_rad, height, teta, turns, chamf, sep_layer),
+            self._make_winding(
+                name,
+                material,
+                in_rad_mid_wind,
+                out_rad_mid_wind,
+                height_mid_wind,
+                teta_mid_wind,
+                turns_mid_wind,
+                chamf_mid_wind,
+                sep_layer,
+            ),
+            self._make_winding(
+                name,
+                material,
+                in_rad_in_wind,
+                out_rad_in_wind,
+                height_in_wind,
+                teta_in_wind,
+                turns_in_wind,
+                chamf_in_wind,
+                sep_layer,
+            ),
+        ]
+        return list_object
+
+    @pyaedt_function_handler()
+    def _make_core(self, name, material, in_rad, out_rad, height, chamfer):
+        tool = self.create_cylinder("Z", [0, 0, -height / 2], in_rad, height, 0, "Tool", matname=material)
+        core = self.create_cylinder("Z", [0, 0, -height / 2], out_rad, height, 0, name=name, matname=material)
+        core.subtract(tool, False)
+        for n in core.edges:
+            n.chamfer(chamfer)
+        return core
+
+    @pyaedt_function_handler()
+    def check_choke_values(self, json_file, create_another_file=True):
+        """Verify the values in the json file and create another one with corrected values next to the first one.
+
+        Parameters
+        ----------
+        json_file : str
+            Full path to json file;
+            Specific json file containing all the parameters to design your on choke.
+        create_another_file : bool
+            Create another file next to the first one in adding _Corrected to the file name if it is True
+            else truncate the existing file
+
+        Returns
+        -------
+        List
+            ``True`` when successful, ``False`` when failed.
+        dictionary : class : 'dict'
+
+        Examples
+        --------
+        Dictionary of the Json file has to be like the following example :
+            dictionary = {
+                "Number of Windings": {"1": True, "2": False, "3": False, "4": False},
+                "Layer": {"Simple": True, "Double": False, "Triple": False},
+                "Layer Type": {"Separate": True, "Linked": False},
+                "Similar Layer": {"Similar": True, "Different": False},
+                "Mode": {"Differential": True, "Common": False},
+                "Wire Section": {"None": False, "Hexagon": False, "Octagon": True, "Circle": False},
+                "Core": {"Name": "Core", "Material": "ferrite", "Inner Radius": 11, "Outer Radius": 17, "Height": 7,
+                         "Chamfer": 0.8},
+                "Outer Winding": {"Name": "Winding", "Material": "copper", "Inner Radius": 12, "Outer Radius": 16,
+                                  "Height": 8, "Wire Diameter": 1, "Turns": 10, "Coil Pit(deg)": 9, "Occupation(%)": 0},
+                "Mid Winding": {"Turns": 8, "Coil Pit(deg)": 0.1, "Occupation(%)": 0},
+                "Inner Winding": {"Turns": 12, "Coil Pit(deg)": 0.1, "Occupation(%)": 0}
+            }
+
+        >>> import json
+        >>> with open("C:/Example/Of/Path/myJsonFile.json", "w") as outfile:
+        >>>     json.dump(dictionary, outfile)
+        >>> from pyaedt import Hfss
+        >>> hfss = Hfss()
+        >>> dictionary_values = hfss.modeler.check_choke_values("C:/Example/Of/Path/myJsonFile.json")
+
+        """
+        dictionary_model = {
+            "Number of Windings": {"1": True, "2": False, "3": False, "4": False},
+            "Layer": {"Simple": True, "Double": False, "Triple": False},
+            "Layer Type": {"Separate": True, "Linked": False},
+            "Similar Layer": {"Similar": True, "Different": False},
+            "Mode": {"Differential": True, "Common": False},
+            "Wire Section": {"None": False, "Hexagon": False, "Octagon": True, "Circle": False},
+            "Core": {
+                "Name": "Core",
+                "Material": "ferrite",
+                "Inner Radius": 11,
+                "Outer Radius": 17,
+                "Height": 7,
+                "Chamfer": 0.8,
+            },
+            "Outer Winding": {
+                "Name": "Winding",
+                "Material": "copper",
+                "Inner Radius": 12,
+                "Outer Radius": 16,
+                "Height": 8,
+                "Wire Diameter": 1,
+                "Turns": 10,
+                "Coil Pit(deg)": 9,
+                "Occupation(%)": 0,
+            },
+            "Mid Winding": {"Turns": 8, "Coil Pit(deg)": 0.1, "Occupation(%)": 0},
+            "Inner Winding": {"Turns": 12, "Coil Pit(deg)": 0.1, "Occupation(%)": 0},
+        }
+        are_inequations_checkable = True
+        security_factor = 1.1
+        sr = security_factor
+        with open(json_file, "r") as read_file:
+            values = json.load(read_file)
+
+        for key, value in dictionary_model.items():
+            if key not in values:
+                self.logger.error("Missing or incorrect key {}.".format(key))
+                return [False, values]
+            if isinstance(value, dict):
+                for k, v in value.items():
+                    if k not in values[key]:
+                        self.logger.error("Missing or incorrect key {}.".format(k))
+                        return [False, values]
+
+        for f_key in values.keys():
+            count_true = False
+            if (
+                f_key == "Number of Windings"
+                or f_key == "Layer"
+                or f_key == "Layer Type"
+                or f_key == "Similar Layer"
+                or f_key == "Mode"
+                or f_key == "Wire Section"
+            ):
+                for s_key in values[f_key].keys():
+                    if type(values[f_key][s_key]) == bool:
+                        if count_true:
+                            values[f_key][s_key] = False
+                        if values[f_key][s_key]:
+                            count_true = True
+                    else:
+                        self.logger.error(
+                            "A character entered is invalid. The values of the dictionary %s must be boolean" % f_key
+                        )
+                        are_inequations_checkable = False
+                        break
+
+        try:
+            core_name = str(values["Core"]["Name"])
+            if len(core_name) > 0:
+                values["Core"]["Name"] = core_name
+        except:
+            self.logger.warning("Core Name must be a non-null string. A default name Core has been set.")
+            values["Core"]["Name"] = "Core"
+
+        try:
+            core_material = str(values["Core"]["Material"])
+            if len(core_material) > 0:
+                if self.materials.checkifmaterialexists(core_material):
+                    values["Core"]["Material"] = core_material
+                else:
+                    self.logger.error(
+                        "%s is not in the material library."
+                        " It can be add using the method add_material" % core_material
+                    )
+                    values["Core"]["Material"] = "ferrite"
+        except:
+            self.logger.warning("Core Material must be a non-null string. A default material Core has been set.")
+            values["Core"]["Material"] = "ferrite"
+
+        try:
+            winding_name = str(values["Outer Winding"]["Name"])
+            if len(winding_name) > 0:
+                values["Outer Winding"]["Name"] = winding_name
+        except:
+            self.logger.warning("Outer Winding Name must be a non-null string. A default name Winding has been set.")
+            values["Outer Winding"]["Name"] = "Winding"
+
+        try:
+            winding_material = str(values["Outer Winding"]["Material"])
+            if len(winding_material) > 0:
+                if self.materials.checkifmaterialexists(winding_material):
+                    values["Outer Winding"]["Material"] = winding_material
+                else:
+                    self.logger.error(
+                        "%s is not in the material library."
+                        " It can be add using the method add_material" % winding_material
+                    )
+                    values["Outer Winding"]["Material"] = "copper"
+        except:
+            self.logger.warning(
+                "Outer Winding Material must be a non-null string." " A default material Winding has been set."
+            )
+            values["Outer Winding"]["Material"] = "copper"
+
+        in_rad_core, are_inequations_checkable = self._check_value_type(
+            values["Core"]["Inner Radius"],
+            float,
+            are_inequations_checkable,
+            "Inner Radius(Core)",
+            "a strictly positive float",
+        )
+
+        out_rad_core, are_inequations_checkable = self._check_value_type(
+            values["Core"]["Outer Radius"],
+            float,
+            are_inequations_checkable,
+            "Outer Radius(Core)",
+            "a strictly positive float",
+        )
+
+        height_core, are_inequations_checkable = self._check_value_type(
+            values["Core"]["Height"], float, are_inequations_checkable, "Height(Core)", "a strictly positive float"
+        )
+        try:
+            core_chamfer = float(values["Core"]["Chamfer"])
+            if core_chamfer < 0:
+                self.logger.error(
+                    "The character entered is invalid. Chamfer must be a positive float." " It must be changed"
+                )
+                are_inequations_checkable = False
+        except:
+            self.logger.error(
+                "The character entered is invalid. Chamfer must be a positive float." " It must be changed"
+            )
+            are_inequations_checkable = False
+
+        in_rad_wind, are_inequations_checkable = self._check_value_type(
+            values["Outer Winding"]["Inner Radius"],
+            float,
+            are_inequations_checkable,
+            "Inner Radius(Winding)",
+            "a strictly positive float",
+        )
+
+        out_rad_wind, are_inequations_checkable = self._check_value_type(
+            values["Outer Winding"]["Outer Radius"],
+            float,
+            are_inequations_checkable,
+            "Outer Radius(Winding)",
+            "a strictly positive float",
+        )
+
+        height_wind, are_inequations_checkable = self._check_value_type(
+            values["Outer Winding"]["Height"],
+            float,
+            are_inequations_checkable,
+            "Height(Winding)",
+            "a strictly positive float",
+        )
+        turns, are_inequations_checkable = self._check_value_type(
+            values["Outer Winding"]["Turns"],
+            int,
+            are_inequations_checkable,
+            "Turns(Outer Winding)",
+            "a strictly positive integer",
+        )
+
+        wind_pit, are_inequations_checkable = self._check_value_type(
+            values["Outer Winding"]["Coil Pit(deg)"],
+            float,
+            are_inequations_checkable,
+            "Coil Pit(Outer Winding)",
+            "a strictly positive float",
+        )
+
+        dia_wire, are_inequations_checkable = self._check_value_type(
+            values["Outer Winding"]["Wire Diameter"],
+            float,
+            are_inequations_checkable,
+            "Wire Diameter",
+            "a strictly positive float",
+        )
+
+        turns2, are_inequations_checkable = self._check_value_type(
+            values["Mid Winding"]["Turns"],
+            int,
+            are_inequations_checkable,
+            "Turns(Mid Winding)",
+            "a strictly positive integer",
+        )
+
+        wind_pit2, are_inequations_checkable = self._check_value_type(
+            values["Mid Winding"]["Coil Pit(deg)"],
+            float,
+            are_inequations_checkable,
+            "Coil Pit(Mid Winding)",
+            "a strictly positive float",
+        )
+
+        turns3, are_inequations_checkable = self._check_value_type(
+            values["Inner Winding"]["Turns"],
+            int,
+            are_inequations_checkable,
+            "Turns(Inner Winding)",
+            "a strictly positive integer",
+        )
+
+        wind_pit3, are_inequations_checkable = self._check_value_type(
+            values["Inner Winding"]["Coil Pit(deg)"],
+            float,
+            are_inequations_checkable,
+            "Coil Pit(Inner Winding)",
+            "a strictly positive float",
+        )
+        if are_inequations_checkable:
+            teta = radians(wind_pit)
+            teta2 = radians(wind_pit2)
+            teta3 = radians(wind_pit3)
+            nb_wind = 1
+            if values["Number of Windings"]["2"]:
+                nb_wind = 2
+            if values["Number of Windings"]["3"]:
+                nb_wind = 3
+            if values["Number of Windings"]["4"]:
+                nb_wind = 4
+
+            nb_lay = 0
+            if values["Layer"]["Double"]:
+                nb_lay = 2
+            if values["Layer"]["Triple"]:
+                nb_lay = 4
+
+            if in_rad_wind > in_rad_core - (nb_lay + 1) * sr * dia_wire / 2:
+                in_rad_wind = in_rad_core - (nb_lay + 1) * sr * dia_wire / 2
+                values["Outer Winding"]["Inner Radius"] = in_rad_wind
+                self.logger.warning("Inner Radius of the winding is too high. The maximum value has been set instead.")
+            if out_rad_wind < out_rad_core + (nb_lay + 1) * sr * dia_wire / 2:
+                out_rad_wind = out_rad_core + (nb_lay + 1) * sr * dia_wire / 2
+                values["Outer Winding"]["Outer Radius"] = out_rad_wind
+                self.logger.warning("Outer Radius of the winding is too low. The minimum value has been set instead.")
+            if height_wind < height_core + (nb_lay + 1) * sr * dia_wire:
+                height_wind = height_core + (nb_lay + 1) * sr * dia_wire
+                values["Outer Winding"]["Height"] = height_wind
+                self.logger.warning("Height of the winding is too low. The minimum value has been set instead.")
+
+            if asin((sr * dia_wire / 2) / in_rad_wind) > pi / nb_wind / turns:
+                turns = int(pi / nb_wind / asin((sr * dia_wire / 2) / in_rad_wind))
+                values["Outer Winding"]["Turns"] = turns
+                self.logger.warning(
+                    "Number of turns of the winding is too high. The maximum value has been set instead."
+                )
+
+            if teta > pi / nb_wind / turns:
+                teta = GeometryOperators.degrees_default_rounded(pi / nb_wind / turns, 3)
+                values["Outer Winding"]["Coil Pit(deg)"] = teta
+                self.logger.warning("Winding Pit is too high. The maximum value has been set instead.")
+
+            elif teta < asin((sr * dia_wire / 2) / in_rad_wind):
+                teta = GeometryOperators.degrees_over_rounded(asin((sr * dia_wire / 2) / in_rad_wind), 3)
+                values["Outer Winding"]["Coil Pit(deg)"] = teta
+                self.logger.warning("Winding Pit is too low. The minimum value has been set instead.")
+
+            else:
+                teta = degrees(teta)
+
+            occ = 100 * turns * teta / (180 / nb_wind)
+            if occ == 100:
+                teta = teta - 0.0003
+                values["Outer Winding"]["Coil Pit(deg)"] = teta
+                if teta < asin((sr * dia_wire / 2) / in_rad_wind) and turns > 1:
+                    turns = turns - 1
+            occ = 100 * turns * teta / (180 / nb_wind)
+            values["Outer Winding"]["Occupation(%)"] = occ
+
+            if values["Similar Layer"]["Different"]:
+                if values["Layer"]["Double"] or values["Layer"]["Triple"]:
+
+                    if asin((sr * dia_wire / 2) / (in_rad_wind + sr * dia_wire)) > pi / nb_wind / turns2:
+                        turns2 = int(pi / nb_wind / asin((sr * dia_wire / 2) / (in_rad_wind + sr * dia_wire)))
+                        values["Mid Winding"]["Turns"] = turns2
+                        self.logger.warning(
+                            "Number of turns of the winding of the second layer is too high. "
+                            "The maximum value has been set instead."
+                        )
+
+                    if turns2 < turns:
+                        turns2 = turns
+                        values["Mid Winding"]["Turns"] = turns2
+                        self.logger.warning(
+                            "Number of turns of the winding of the second layer should be "
+                            "at least equal to those of the first layer."
+                        )
+
+                    if teta2 > pi / nb_wind / turns2:
+                        teta2 = GeometryOperators.degrees_default_rounded(pi / nb_wind / turns2, 3)
+                        values["Mid Winding"]["Coil Pit(deg)"] = teta2
+                        self.logger.warning(
+                            "Winding Pit of the second layer is too high. The maximum value has been set instead."
+                        )
+
+                    elif teta2 < asin((sr * dia_wire / 2) / (in_rad_wind + sr * dia_wire)):
+                        teta2 = GeometryOperators.degrees_over_rounded(
+                            asin((sr * dia_wire / 2) / (in_rad_wind + sr * dia_wire)), 3
+                        )
+                        values["Mid Winding"]["Coil Pit(deg)"] = teta2
+                        self.logger.warning(
+                            "Winding Pit of the second layer is too low. The minimum value has been set instead."
+                        )
+
+                    else:
+                        teta2 = degrees(teta2)
+                        values["Mid Winding"]["Coil Pit(deg)"] = teta2
+
+                    occ2 = 100 * turns2 * teta2 / (180 / nb_wind)
+                    if occ2 < occ:
+                        teta2 = ceil(turns * teta / turns2 * 1000) / 1000
+                        values["Mid Winding"]["Coil Pit(deg)"] = teta2
+                        occ2 = 100 * turns2 * teta2 / (180 / nb_wind)
+                        self.logger.warning(
+                            "Occupation of the second layer should be at least equal to that of the first layer."
+                        )
+                    if occ2 == 100:
+                        teta2 = teta2 - 0.0002
+                        values["Mid Winding"]["Coil Pit(deg)"] = teta2
+                    occ2 = 100 * turns2 * teta2 / (180 / nb_wind)
+                    values["Mid Winding"]["Occupation(%)"] = occ2
+                    # TODO if occ2 == 100: method can be improve
+
+                if values["Layer"]["Triple"]:
+
+                    if asin((sr * dia_wire / 2) / (in_rad_wind + 2 * sr * dia_wire)) > pi / nb_wind / turns3:
+                        turns3 = int(pi / nb_wind / asin((sr * dia_wire / 2) / (in_rad_wind + 2 * sr * dia_wire)))
+                        values["Inner Winding"]["Turns"] = turns3
+                        self.logger.warning(
+                            "Number of turns of the winding of the third layer is too high. "
+                            "The maximum value has been set instead."
+                        )
+
+                    if turns3 < turns2:
+                        turns3 = turns2
+                        values["Inner Winding"]["Turns"] = turns3
+                        self.logger.warning(
+                            "Number of turns of the winding of the third layer should be "
+                            "at least equal to those of the second layer."
+                        )
+
+                    if teta3 > pi / nb_wind / turns3:
+                        teta3 = GeometryOperators.degrees_default_rounded(pi / nb_wind / turns3, 3)
+                        values["Inner Winding"]["Coil Pit(deg)"] = teta3
+                        self.logger.warning(
+                            "Winding Pit of the third layer is too high. The maximum value has been set instead."
+                        )
+
+                    elif teta3 < asin((sr * dia_wire / 2) / (in_rad_wind + 2 * sr * dia_wire)):
+                        teta3 = GeometryOperators.degrees_over_rounded(
+                            asin((sr * dia_wire / 2) / (in_rad_wind + 2 * sr * dia_wire)), 3
+                        )
+                        values["Inner Winding"]["Coil Pit(deg)"] = teta3
+                        self.logger.warning(
+                            "Winding Pit of the third layer is too low. The minimum value has been set instead."
+                        )
+
+                    else:
+                        teta3 = degrees(teta3)
+                        values["Inner Winding"]["Coil Pit(deg)"] = teta3
+
+                    occ3 = 100 * turns3 * teta3 / (180 / nb_wind)
+                    if occ3 < occ2:
+                        teta3 = ceil(turns2 * teta2 / turns3 * 1000) / 1000
+                        values["Inner Winding"]["Coil Pit(deg)"] = teta3
+                        occ3 = 100 * turns3 * teta3 / (180 / nb_wind)
+                    if occ3 == 100:
+                        teta3 = teta3 - 0.0001
+                        values["Inner Winding"]["Coil Pit(deg)"] = teta3
+                    occ3 = 100 * turns3 * teta3 / (180 / nb_wind)
+                    values["Inner Winding"]["Occupation(%)"] = occ3
+                    # TODO if occ3 == 100: method can be improve
+            else:
+                values["Mid Winding"]["Coil Pit(deg)"] = teta
+                values["Inner Winding"]["Coil Pit(deg)"] = teta
+                values["Mid Winding"]["Turns"] = turns
+                values["Inner Winding"]["Turns"] = turns
+                values["Mid Winding"]["Occupation(%)"] = occ
+                values["Inner Winding"]["Occupation(%)"] = occ
+
+            if create_another_file:
+                spl_path = json_file.split(".")
+                with open(spl_path[0] + "_Corrected.json", "w") as outfile:
+                    json.dump(values, outfile)
+            else:
+                with open(json_file, "w") as outfile:
+                    json.dump(values, outfile)
+
+        return [are_inequations_checkable, values]
+
+    @pyaedt_function_handler()
+    def _make_winding_follow_chamfer(self, chamfer, security_factor, wire_diameter, layer_number):
+        sr = security_factor
+        w_rad_inc = layer_number * sr * wire_diameter / 2
+        distance = sqrt(2 * w_rad_inc**2) - w_rad_inc + sqrt(2 * chamfer**2) / 2
+        return sqrt(2) * distance
+
+    @pyaedt_function_handler()
+    def _check_value_type(self, taken_value, value_type, are_inequations_checkable, part_message1, part_message2):
+        are_inequations_checkable = are_inequations_checkable
+        if value_type == int:
+            try:
+                receiving_variable = int(taken_value)
+                if receiving_variable <= 0:
+                    self.logger.error(
+                        "The character entered is invalid. "
+                        + part_message1
+                        + "  must be "
+                        + part_message2
+                        + ".  It must be changed"
+                    )
+                    are_inequations_checkable = False
+            except:
+                receiving_variable = None
+                self.logger.error(
+                    "The character entered is invalid. "
+                    + part_message1
+                    + "  must be "
+                    + part_message2
+                    + ".  It must be changed"
+                )
+                are_inequations_checkable = False
+        elif value_type == float:
+            try:
+                receiving_variable = float(taken_value)
+                if receiving_variable <= 0:
+                    self.logger.error(
+                        "The character entered is invalid. "
+                        + part_message1
+                        + "  must be "
+                        + part_message2
+                        + ".  It must be changed"
+                    )
+                    are_inequations_checkable = False
+            except:
+                receiving_variable = None
+                self.logger.error(
+                    "The character entered is invalid. "
+                    + part_message1
+                    + "  must be "
+                    + part_message2
+                    + ".  It must be changed"
+                )
+                are_inequations_checkable = False
+        return receiving_variable, are_inequations_checkable

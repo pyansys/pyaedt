@@ -1,14 +1,10 @@
-import os
 import os.path
-import warnings
 
+from pyaedt import is_ironpython
 from pyaedt.generic.general_methods import env_path
 
-if os.name == "posix":
-    try:
-        import subprocessdotnet as subprocess
-    except:
-        warnings.warn("Pythonnet is needed to run pyaedt within Linux")
+if os.name == "posix" and is_ironpython:
+    import subprocessdotnet as subprocess
 else:
     import subprocess
 
@@ -198,7 +194,7 @@ class SiwaveSolve(object):
             if os.path.exists(exec_file):
                 with open(exec_file, "r+") as f:
                     content = f.readlines()
-                    if not "SetNumCpus" in content:
+                    if "SetNumCpus" not in content:
                         f.writelines(str.format("SetNumCpus {}", str(self.nbcores)) + "\n")
                         f.writelines("SaveSiw")
                     else:
@@ -269,6 +265,6 @@ class SiwaveSolve(object):
         command.append(scriptname)
         print(command)
         os.system(" ".join(command))
-        #p1 = subprocess.call(" ".join(command))
-        #p1.wait()
+        # p1 = subprocess.call(" ".join(command))
+        # p1.wait()
         return os.path.join(output_folder, aedt_file_name)

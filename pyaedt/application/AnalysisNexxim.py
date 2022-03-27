@@ -1,9 +1,10 @@
-from pyaedt.generic.general_methods import aedt_exception_handler
+import warnings
+
+from pyaedt.application.Analysis import Analysis
+from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.modeler.Circuit import ModelerNexxim
 from pyaedt.modules.PostProcessor import CircuitPostProcessor
 from pyaedt.modules.SolveSetup import SetupCircuit
-from pyaedt.application.Analysis import Analysis
-from pyaedt.application.Design import solutions_settings
 
 
 class FieldAnalysisCircuit(Analysis):
@@ -33,7 +34,6 @@ class FieldAnalysisCircuit(Analysis):
         close_on_exit=False,
         student_version=False,
     ):
-        self.solution_type = solution_type
         Analysis.__init__(
             self,
             application,
@@ -64,16 +64,14 @@ class FieldAnalysisCircuit(Analysis):
         return self._post
 
     @property
-    def solution_type(self):
-        """Solution type."""
-        return self._solution_type
+    def existing_analysis_sweeps(self):
+        """Analysis setups.
 
-    @solution_type.setter
-    def solution_type(self, soltype):
-        if soltype:
-            self._solution_type = solutions_settings[soltype]
-        else:
-            self._solution_type = "NexximLNA"
+        References
+        ----------
+
+        >>> oModule.GetAllSolutionSetups"""
+        return self.existing_analysis_setups
 
     @property
     def existing_analysis_setups(self):
@@ -110,8 +108,29 @@ class FieldAnalysisCircuit(Analysis):
         return self.oanalysis.GetAllSolutionSetups()
 
     @property
+    def excitations(self):
+        """Get all excitation names.
+
+        Returns
+        -------
+        list
+            List of excitation names. Excitations with multiple modes will return one
+            excitation for each mode.
+
+        References
+        ----------
+
+        >>> oModule.GetAllPorts
+        """
+        ports = [p.replace("IPort@", "").split(";")[0] for p in self.modeler.oeditor.GetAllPorts() if "IPort@" in p]
+        return ports
+
+    @property
     def get_excitations_name(self):
         """Excitation names.
+
+        .. deprecated:: 0.4.27
+           Use :func:`excitations` property instead.
 
         Returns
         -------
@@ -123,8 +142,8 @@ class FieldAnalysisCircuit(Analysis):
 
         >>> oEditor.GetAllPorts
         """
-        ports = [p.replace("IPort@", "").split(";")[0] for p in self.modeler.oeditor.GetAllPorts()]
-        return ports
+        warnings.warn("`get_excitations_name` is deprecated. Use `excitations` property instead.", DeprecationWarning)
+        return self.excitations
 
     @property
     def get_all_sparameter_list(self, excitation_names=[]):
@@ -145,7 +164,7 @@ class FieldAnalysisCircuit(Analysis):
 
         """
         if not excitation_names:
-            excitation_names = self.get_excitations_name
+            excitation_names = self.excitations
         spar = []
         k = 0
         for i in excitation_names:
@@ -155,14 +174,14 @@ class FieldAnalysisCircuit(Analysis):
                 k += 1
         return spar
 
-    @aedt_exception_handler
-    def get_all_return_loss_list(self, excitation_names=[], excitation_name_prefix=""):
+    @pyaedt_function_handler()
+    def get_all_return_loss_list(self, excitation_names=None, excitation_name_prefix=""):
         """Retrieve a list of all return losses for a list of exctitations.
 
         Parameters
         ----------
         excitation_names : list, optional
-            List of excitations. The default is ``[]``, in which case
+            List of excitations. The default is ``None``, in which case
             the return losses for all excitations are to be provided.
             For example ``["1", "2"]``.
         excitation_name_prefix : string, optional
@@ -179,8 +198,11 @@ class FieldAnalysisCircuit(Analysis):
 
         >>> oEditor.GetAllPorts
         """
+        if excitation_names == None:
+            excitation_names = []
+
         if not excitation_names:
-            excitation_names = self.get_excitations_name
+            excitation_names = self.excitations
         if excitation_name_prefix:
             excitation_names = [i for i in excitation_names if excitation_name_prefix.lower() in i.lower()]
         spar = []
@@ -188,8 +210,8 @@ class FieldAnalysisCircuit(Analysis):
             spar.append("S({},{})".format(i, i))
         return spar
 
-    @aedt_exception_handler
-    def get_all_insertion_loss_list(self, trlist=[], reclist=[], tx_prefix="", rx_prefix=""):
+    @pyaedt_function_handler()
+    def get_all_insertion_loss_list(self, trlist=None, reclist=None, tx_prefix="", rx_prefix=""):
         """Retrieve a list of all insertion losses from two lists of excitations (driver and receiver).
 
         Parameters
@@ -215,11 +237,16 @@ class FieldAnalysisCircuit(Analysis):
 
         >>> oEditor.GetAllPorts
         """
+        if trlist == None:
+            trlist = []
+        if reclist == None:
+            reclist = []
+
         spar = []
         if not trlist:
-            trlist = [i for i in self.get_excitations_name if tx_prefix in i]
+            trlist = [i for i in self.excitations if tx_prefix in i]
         if not reclist:
-            reclist = [i for i in self.get_excitations_name if rx_prefix in i]
+            reclist = [i for i in self.excitations if rx_prefix in i]
         if len(trlist) != len(reclist):
             self.logger.error("The TX and RX lists should be the same length.")
             return False
@@ -227,7 +254,7 @@ class FieldAnalysisCircuit(Analysis):
             spar.append("S({},{})".format(i, j))
         return spar
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_next_xtalk_list(self, trlist=[], tx_prefix=""):
         """Retrieve a list of all the near end XTalks from a list of excitations (driver and receiver).
 
@@ -252,7 +279,7 @@ class FieldAnalysisCircuit(Analysis):
         """
         next = []
         if not trlist:
-            trlist = [i for i in self.get_excitations_name if tx_prefix in i]
+            trlist = [i for i in self.excitations if tx_prefix in i]
         for i in trlist:
             k = trlist.index(i) + 1
             while k < len(trlist):
@@ -260,8 +287,8 @@ class FieldAnalysisCircuit(Analysis):
                 k += 1
         return next
 
-    @aedt_exception_handler
-    def get_fext_xtalk_list(self, trlist=[], reclist=[], tx_prefix="", rx_prefix="", skip_same_index_couples=True):
+    @pyaedt_function_handler()
+    def get_fext_xtalk_list(self, trlist=None, reclist=None, tx_prefix="", rx_prefix="", skip_same_index_couples=True):
         """Retrieve a list of all the far end XTalks from two lists of exctitations (driver and receiver).
 
         Parameters
@@ -293,18 +320,23 @@ class FieldAnalysisCircuit(Analysis):
 
         >>> oEditor.GetAllPorts
         """
+        if trlist == None:
+            trlist = []
+        if reclist == None:
+            reclist = []
+
         fext = []
         if not trlist:
-            trlist = [i for i in self.get_excitations_name if tx_prefix in i]
+            trlist = [i for i in self.excitations if tx_prefix in i]
         if not reclist:
-            reclist = [i for i in self.get_excitations_name if rx_prefix in i]
+            reclist = [i for i in self.excitations if rx_prefix in i]
         for i in trlist:
             for k in reclist:
                 if not skip_same_index_couples or reclist.index(k) != trlist.index(i):
                     fext.append("S({},{})".format(i, k))
         return fext
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_setup(self, setupname):
         """Retrieve the setup from the current design.
 
@@ -324,7 +356,7 @@ class FieldAnalysisCircuit(Analysis):
             self.analysis_setup = setupname
         return setup
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_setup(self, setupname="MySetupAuto", setuptype=None, props={}):
         """Create a new setup.
 
@@ -358,11 +390,10 @@ class FieldAnalysisCircuit(Analysis):
 
         name = self.generate_unique_setup_name(setupname)
         setup = SetupCircuit(self, setuptype, name)
-        setup.name = name
         setup.create()
         if props:
             for el in props:
-                setup.props[el] = props[el]
+                setup.props._setitem_without_update(el, props[el])
         setup.update()
         self.analysis_setup = name
         self.setups.append(setup)

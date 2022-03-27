@@ -1,6 +1,6 @@
 """
-Netlist Example Analysis
-------------------------
+Circuit: Netlist to Schematic Import
+------------------------------------
 # This example shows how to import Netlist data into a
 # Circuit design. Supported Netlist files are HSPICE and,
 # partially, Mentor.
@@ -16,6 +16,7 @@ import os
 
 from pyaedt import examples
 import tempfile
+
 netlist = examples.download_netlist()
 from pyaedt import generate_unique_name
 
@@ -35,11 +36,11 @@ from pyaedt import Desktop
 ###############################################################################
 # Launch AEDT and Circuit
 # ~~~~~~~~~~~~~~~~~~~~~~~
-# This example launches AEDT 2021.2 in graphical mode.
+# This example launches AEDT 2022R1 in graphical mode.
 
 # This examples uses SI units.
 
-desktopVersion = "2021.2"
+desktopVersion = "2022.1"
 
 
 ###############################################################################

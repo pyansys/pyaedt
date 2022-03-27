@@ -1,6 +1,7 @@
-from pyaedt.generic.general_methods import aedt_exception_handler
-from pyaedt.generic.DataHandlers import _dict2arg
 from collections import OrderedDict
+
+from pyaedt.generic.DataHandlers import _dict2arg
+from pyaedt.generic.general_methods import pyaedt_function_handler
 
 meshlink = [("ImportMesh", False)]
 autosweep = [("RangeType", "LinearStep"), ("RangeStart", "1GHz"), ("RangeEnd", "10GHz"), ("RangeStep", "1GHz")]
@@ -12,7 +13,7 @@ muoption = [("MuNonLinearBH", True)]
 transientelectrostatic = [("SaveField", True), ("Stop", "100s"), ("InitialStep", "0.01s"), ("MaxStep", "5s")]
 transienthfss = [
     ("TimeProfile", "Broadband Pulse"),
-    ("HfssFrequency", "1GHz"),
+    ("HfssFrequency", "5GHz"),
     ("MinFreq", "100MHz"),
     ("MaxFreq", "1GHz"),
     ("NumFreqsExtracted", 401),
@@ -173,6 +174,14 @@ Electrostatic = [
 ]
 """Maxwell electrostatic setup properties and default values."""
 
+subrange = [
+    ("SweepSetupType", "LinearStep"),
+    ("StartValue", "1e-08GHz"),
+    ("StopValue", "1e-06GHz"),
+    ("StepSize", "1e-08GHz"),
+]
+subranges = [("Subrange", subrange)]
+
 EddyCurrent = [
     ("Enabled", True),
     ("MeshLink", meshlink),
@@ -190,10 +199,7 @@ EddyCurrent = [
     ("SmoothBHCurve", False),
     ("Frequency", "60Hz"),
     ("HasSweepSetup", False),
-    ("SweepSetupType", "LinearStep"),
-    ("StartValue", "1e-08GHz"),
-    ("StopValue", "1e-06GHz"),
-    ("StepSize", "1e-08GHz"),
+    ("SweepRanges", subranges),
     ("UseHighOrderShapeFunc", False),
     ("UseMuLink", False),
 ]
@@ -1007,6 +1013,135 @@ HFSS3DLayout = [
 ]
 """HFSS 3D Layout setup properties and default values."""
 
+HFSS3DLayout_SweepDataList = []
+HFSS3DLayout_SIWAdvancedSettings = [
+    ("IncludeCoPlaneCoupling", True),
+    ("IncludeInterPlaneCoupling:=", False),
+    ("IncludeSplitPlaneCoupling:=", True),
+    ("IncludeFringeCoupling", True),
+    ("IncludeTraceCoupling", True),
+    ("XtalkThreshold", "-34"),
+    ("MaxCoupledLines", 12),
+    ("MinVoidArea", "2mm2"),
+    ("MinPadAreaToMesh", "1mm2"),
+    ("MinPlaneAreaToMesh", "6.25e-6mm2"),
+    ("SnapLengthThreshold", "2.5um"),
+    ("MeshAutoMatic", True),
+    ("MeshFrequency", "4GHz"),
+    ("ReturnCurrentDistribution", False),
+    ("IncludeVISources", False),
+    ("IncludeInfGnd", False),
+    ("InfGndLocation", "0mm"),
+    ("PerformERC", False),
+    ("IgnoreNonFunctionalPads", True),
+]
+HFSS3DLayout_SIWDCSettings = [
+    ("UseDCCustomSettings", False),
+    ("PlotJV", True),
+    ("ComputeInductance", False),
+    ("ContactRadius", "0.1mm"),
+    ("DCSliderPos", 1),
+]
+HFSS3DLayout_SIWDCAdvancedSettings = [
+    ("DcMinPlaneAreaToMesh", "0.25mm2"),
+    ("DcMinVoidAreaToMesh", "0.01mm2"),
+    ("MaxInitMeshEdgeLength", "2.5mm"),
+    ("PerformAdaptiveRefinement", True),
+    ("MaxNumPasses", 5),
+    ("MinNumPasses", 1),
+    ("PercentLocalRefinement", 20),
+    ("EnergyError", 2),
+    ("MeshBws", True),
+    ("RefineBws", False),
+    ("MeshVias", True),
+    ("RefineVias", False),
+    ("NumBwSides", 8),
+    ("NumViaSides", 8),
+]
+HFSS3DLayout_SIWDCIRSettings = [
+    ("IcepakTempFile", "D:/Program Files/AnsysEM/AnsysEM21.2/Win64/"),
+    ("SourceTermsToGround", []),
+    ("ExportDCThermalData", False),
+    ("ImportThermalData", False),
+    ("FullDCReportPath", ""),
+    ("ViaReportPath", ""),
+    ("PerPinResPath", ""),
+    ("DCReportConfigFile", ""),
+    ("DCReportShowActiveDevices", False),
+    ("PerPinUsePinFormat", False),
+    ("UseLoopResForPerPin", False),
+]
+
+HFSS3DLayout_SimulationSettings = [
+    ("Enabled", True),
+    ("UseSISettings", True),
+    ("UseCustomSettings", False),
+    ("SISliderPos", 1),
+    ("PISliderPos", 1),
+    ("SIWAdvancedSettings", HFSS3DLayout_SIWAdvancedSettings),
+    ("SIWDCSettings", HFSS3DLayout_SIWDCSettings),
+    ("SIWDCAdvancedSettings", HFSS3DLayout_SIWDCAdvancedSettings),
+    ("SIWDCIRSettings", HFSS3DLayout_SIWDCIRSettings),
+]
+
+HFSS3DLayout_ACSimulationSettings = [
+    ("Enabled", True),
+    ("UseSISettings", True),
+    ("UseCustomSettings", False),
+    ("SISliderPos", 1),
+    ("PISliderPos", 1),
+    ("SIWAdvancedSettings", HFSS3DLayout_SIWAdvancedSettings),
+    ("SIWDCSettings", HFSS3DLayout_SIWDCSettings),
+    ("SIWDCAdvancedSettings", HFSS3DLayout_SIWDCAdvancedSettings),
+]
+SiwaveDC3DLayout = [
+    ("Properties", HFSS3DLayout_Properties),
+    ("CustomSetup", False),
+    ("SolveSetupType", "SIwave"),
+    ("Color", ["R:=", 0, "G:=", 0, "B:=", 0]),
+    ("Position", 0),
+    ("SimSetupType", "kSIwave"),
+    ("SimulationSettings", HFSS3DLayout_SimulationSettings),
+    ("SweepDataList", HFSS3DLayout_SweepDataList),
+]
+
+SiwaveAC3DLayout = [
+    ("Properties", HFSS3DLayout_Properties),
+    ("CustomSetup", False),
+    ("SolveSetupType", "SIwaveDCIR"),
+    ("Position", 0),
+    ("SimSetupType", "kSIwaveDCIR"),
+    ("SimulationSettings", HFSS3DLayout_ACSimulationSettings),
+    ("SweepDataList", HFSS3DLayout_SweepDataList),
+]
+
+HFSS3DLayout_LNASimulationSettings = [
+    ("Enabled", True),
+    ("GroupDelay", False),
+    ("Perturbation", 0.1),
+    ("Noise", False),
+    ("Skip_DC", False),
+    ("AdditionalOptions", ""),
+    ("BaseOptionName", "(Default Options)"),
+    ("FilterText", ""),
+]
+LNA_Sweep = [
+    ("DataId", "Sweep0"),
+    ("Properties", HFSS3DLayout_Properties),
+    ("Sweep", SweepDefinition),
+    ("SolutionID", -1),
+]
+HFSS3DLayout_LNAData = [("LNA Sweep 1", LNA_Sweep)]
+LNA3DLayout = [
+    ("Properties", HFSS3DLayout_Properties),
+    ("CustomSetup", False),
+    ("SolveSetupType", "LNA"),
+    ("Position", 0),
+    ("SimSetupType", "kLNA"),
+    ("SimulationSettings", HFSS3DLayout_LNASimulationSettings),
+    ("SweepDataList", HFSS3DLayout_SweepDataList),
+    ("Data", HFSS3DLayout_LNAData),
+]
 MechTerm = [
     ("Enabled", True),
     ("MeshLink", meshlink),
@@ -1111,15 +1246,15 @@ class SweepHFSS(object):
             self.props["SMatrixOnlySolveAbove"] = "1MHz"
             self.props["SweepRanges"] = {"Subrange": []}
 
-    @aedt_exception_handler
-    def add_subrange(self, rangetype, start, end=None, count=None, unit="GHz", save_single_fields=False):
+    @pyaedt_function_handler()
+    def add_subrange(self, rangetype, start, end=None, count=None, unit="GHz", save_single_fields=False, clear=False):
         """Add a subrange to the sweep.
 
         Parameters
         ----------
         rangetype : str
             Type of the subrange. Options are ``"LinearCount"``,
-            ``"LinearStep"``, ``"LogScale"``, and ``"SinglePoints"``.
+            ``"LinearStep"``, ``"LogScale"`` and ``"SinglePoints"``.
         start : float
             Starting frequency.
         end : float, optional
@@ -1131,16 +1266,49 @@ class SweepHFSS(object):
         save_single_fields : bool, optional
             Whether to save the fields of the single point. The default is ``False``.
             Used only for ``rangetype="SinglePoints"``.
+        clear : boolean, optional
+            If set to ``True``, all other subranges will be suppressed except the current one under creation.
+            Default value is ``False``.
 
         Returns
         -------
         bool
             ``True`` when successful, ``False`` when failed.
 
+        Examples
+        --------
+        Create a setup in an HFSS design and add multiple sweep ranges.
+
+        >>> setup = hfss.create_setup(setupname="MySetup")
+        >>> sweep = setup.add_sweep()
+        >>> sweep.change_type("Interpolating")
+        >>> sweep.change_range("LinearStep", 1.1, 2.1, 0.4, "GHz")
+        >>> sweep.add_subrange("LinearCount", 1, 1.5, 5, "MHz")
+        >>> sweep.add_subrange("LogScale", 1, 3, 10, "GHz")
+
         """
         if rangetype == "LinearCount" or rangetype == "LinearStep" or rangetype == "LogScale":
             if not end or not count:
                 raise AttributeError("Parameters 'end' and 'count' must be present.")
+
+        if clear:
+            self.props["RangeType"] = rangetype
+            self.props["RangeStart"] = str(start) + unit
+            if rangetype == "LinearCount":
+                self.props["RangeEnd"] = str(end) + unit
+                self.props["RangeCount"] = count
+            elif rangetype == "LinearStep":
+                self.props["RangeEnd"] = str(end) + unit
+                self.props["RangeStep"] = str(count) + unit
+            elif rangetype == "LogScale":
+                self.props["RangeEnd"] = str(end) + unit
+                self.props["RangeSamples"] = count
+            elif rangetype == "SinglePoints":
+                self.props["RangeEnd"] = str(start) + unit
+                self.props["SaveSingleField"] = save_single_fields
+            self.props["SweepRanges"] = {"Subrange": []}
+            return self.update()
+
         range = {}
         range["RangeType"] = rangetype
         range["RangeStart"] = str(start) + unit
@@ -1151,7 +1319,7 @@ class SweepHFSS(object):
             range["RangeEnd"] = str(end) + unit
             range["RangeStep"] = str(count) + unit
         elif rangetype == "LogScale":
-            range["RangeEnd"] = end
+            range["RangeEnd"] = str(end) + unit
             range["RangeCount"] = self.props["RangeCount"]
             range["RangeSamples"] = count
         elif rangetype == "SinglePoints":
@@ -1159,7 +1327,9 @@ class SweepHFSS(object):
             range["SaveSingleField"] = save_single_fields
         self.props["SweepRanges"]["Subrange"].append(range)
 
-    @aedt_exception_handler
+        return self.update()
+
+    @pyaedt_function_handler()
     def create(self):
         """Create a sweep.
 
@@ -1172,7 +1342,7 @@ class SweepHFSS(object):
         self.oanalysis.InsertFrequencySweep(self.setupname, self._get_args())
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def update(self):
         """Update a sweep.
 
@@ -1185,7 +1355,7 @@ class SweepHFSS(object):
         self.oanalysis.EditFrequencySweep(self.setupname, self.name, self._get_args())
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _get_args(self, props=None):
         """Retrieve arguments.
 
@@ -1230,13 +1400,13 @@ class SweepHFSS3DLayout(object):
     """
 
     def __init__(
-            self,
-            oanalysis,
-            setupname,
-            sweepname,
-            sweeptype="Interpolating",
-            save_fields=True,
-            props=None,
+        self,
+        oanalysis,
+        setupname,
+        sweepname,
+        sweeptype="Interpolating",
+        save_fields=True,
+        props=None,
     ):
         self.oanalysis = oanalysis
         self.props = {}
@@ -1282,7 +1452,7 @@ class SweepHFSS3DLayout(object):
             self.props["AllOffDiagEntries"] = False
             self.props["MagMinThreshold"] = 0.01
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def change_type(self, sweeptype):
         """Change the type of the sweep.
 
@@ -1305,7 +1475,7 @@ class SweepHFSS3DLayout(object):
             raise AttributeError("Allowed sweeptype options are 'Interpolating' and 'Discrete'.")
         return self.update()
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def set_save_fields(self, save_fields, save_rad_fields=False):
         """Choose whether the fields are saved.
 
@@ -1325,7 +1495,7 @@ class SweepHFSS3DLayout(object):
         self.props["SaveRadFieldsOnly"] = save_rad_fields
         return self.update()
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def add_subrange(self, rangetype, start, end=None, count=None, unit="GHz"):
         """Add a subrange to the sweep.
 
@@ -1357,19 +1527,19 @@ class SweepHFSS3DLayout(object):
                 raise AttributeError("Parameters 'end' and 'count' must be present.")
 
         if rangetype == "LinearCount":
-            sweep_range = " LINC " + str(start)+unit + " " + str(end)+unit + " " + str(count)
+            sweep_range = " LINC " + str(start) + unit + " " + str(end) + unit + " " + str(count)
         elif rangetype == "LinearStep":
-            sweep_range = " LIN " + str(start)+unit + " " + str(end)+unit + " " + str(count)+unit
+            sweep_range = " LIN " + str(start) + unit + " " + str(end) + unit + " " + str(count) + unit
         elif rangetype == "LogScale":
-            sweep_range = " DEC " + str(start)+unit + " " + str(end)+unit + " " + str(count)+unit
+            sweep_range = " DEC " + str(start) + unit + " " + str(end) + unit + " " + str(count) + unit
         elif rangetype == "SinglePoint":
-            sweep_range = " " + str(start)+unit
+            sweep_range = " " + str(start) + unit
         else:
             raise AttributeError('Allowed rangetype are "LinearCount", "SinglePoint", "LinearStep", and "LogScale".')
         self.props["Sweeps"]["Data"] += sweep_range
         return self.update()
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def change_range(self, rangetype, start, end=None, count=None, unit="GHz"):
         """Change the range of the sweep.
 
@@ -1396,19 +1566,19 @@ class SweepHFSS3DLayout(object):
 
         """
         if rangetype == "LinearCount":
-            sweep_range = "LINC " + str(start)+unit + " " + str(end)+unit + " " + str(count)
+            sweep_range = "LINC " + str(start) + unit + " " + str(end) + unit + " " + str(count)
         elif rangetype == "LinearStep":
-            sweep_range = "LIN " + str(start)+unit + " " + str(end)+unit + " " + str(count)+unit
+            sweep_range = "LIN " + str(start) + unit + " " + str(end) + unit + " " + str(count) + unit
         elif rangetype == "LogScale":
-            sweep_range = "DEC " + str(start)+unit + " " + str(end)+unit + " " + str(count)+unit
+            sweep_range = "DEC " + str(start) + unit + " " + str(end) + unit + " " + str(count) + unit
         elif rangetype == "SinglePoint":
-            sweep_range = str(start)+unit
+            sweep_range = str(start) + unit
         else:
             raise AttributeError('Allowed rangetype are "LinearCount", "SinglePoint", "LinearStep", and "LogScale".')
         self.props["Sweeps"]["Data"] = sweep_range
         return self.update()
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create(self):
         """Create a sweep.
 
@@ -1421,7 +1591,7 @@ class SweepHFSS3DLayout(object):
         self.oanalysis.AddSweep(self.setupname, self._get_args())
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def update(self):
         """Update the sweep.
 
@@ -1434,7 +1604,7 @@ class SweepHFSS3DLayout(object):
         self.oanalysis.EditSweep(self.setupname, self.name, self._get_args())
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _get_args(self, props=None):
         """Retrieve properties.
 
@@ -1512,8 +1682,8 @@ class SweepQ3D(object):
                 self.props["InterpMinSolns"] = 0
                 self.props["InterpMinSubranges"] = 1
 
-    @aedt_exception_handler
-    def add_subrange(self, type, start, end, count):
+    @pyaedt_function_handler()
+    def add_subrange(self, type, start, end=None, count=None, unit="GHz", clear=False):
         """Add a subrange to the sweep.
 
         Parameters
@@ -1527,6 +1697,10 @@ class SweepQ3D(object):
             Stopping frequency.
         count : int or float
             Frequency count or frequency step.
+        unit : str, optional
+            Frequency Units.
+        clear : bool, optional
+            Either if the subrange has to be appended to existing ones or replace them.
 
         Returns
         -------
@@ -1534,21 +1708,40 @@ class SweepQ3D(object):
             ``True`` when successful, ``False`` when failed.
 
         """
+
+        if clear:
+            self.props["RangeType"] = type
+            self.props["RangeStart"] = str(start) + unit
+            if type == "LinearCount":
+                self.props["RangeEnd"] = str(end) + unit
+                self.props["RangeCount"] = count
+            elif type == "LinearStep":
+                self.props["RangeEnd"] = str(end) + unit
+                self.props["RangeStep"] = str(count) + unit
+            elif type == "LogScale":
+                self.props["RangeEnd"] = str(end) + unit
+                self.props["RangeSamples"] = count
+            self.props["SweepRanges"] = {"Subrange": []}
+            return self.update()
         range = {}
         range["RangeType"] = type
-        range["RangeStart"] = start
-        range["RangeEnd"] = end
+        range["RangeStart"] = str(start) + unit
         if type == "LinearCount":
+            range["RangeEnd"] = str(end) + unit
             range["RangeCount"] = count
         elif type == "LinearStep":
-            range["RangeStep"] = count
+            range["RangeEnd"] = str(end) + unit
+            range["RangeStep"] = str(count) + unit
         elif type == "LogScale":
+            range["RangeEnd"] = str(end) + unit
             range["RangeCount"] = self.props["RangeCount"]
             range["RangeSamples"] = count
-        self.props["SweepRanges"].append(range)
-        return True
+        if not self.props.get("SweepRanges") or not self.props["SweepRanges"].get("Subrange"):
+            self.props["SweepRanges"] = {"Subrange": []}
+        self.props["SweepRanges"]["Subrange"].append(range)
+        return self.update()
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create(self):
         """Create a sweep.
 
@@ -1561,7 +1754,7 @@ class SweepQ3D(object):
         self.oanalysis.InsertSweep(self.setupname, self._get_args())
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def update(self):
         """Update the sweep.
 
@@ -1575,7 +1768,7 @@ class SweepQ3D(object):
 
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _get_args(self, props=None):
         """Retrieve properties.
 
@@ -1600,75 +1793,6 @@ class SweepQ3D(object):
 
 class SetupKeys(object):
     """Provides setup keys."""
-
-    defaultSetups = {
-        "DrivenModal": 1,
-        "DrivenTerminal": 1,
-        "Eigenmode": 2,
-        "Transient Network": 3,
-        "SBR+": 4,
-        "Transient": 5,
-        "Magnetostatic": 6,
-        "EddyCurrent": 7,
-        "Electrostatic": 8,
-        "ElectroDCConduction": 9,
-        "ElectricTransient": 10,
-        "SteadyStateTemperatureAndFlow": 11,
-        "SteadyStateTemperatureOnly": 12,
-        "SteadyStateFlowOnly": 13,
-        "SteadyState": 11,
-        "Matrix": 14,
-        "NexximLNA": 15,
-        "NexximDC": 16,
-        "NexximTransient": 17,
-        "NexximQuickEye": 18,
-        "NexximVerifEye": 19,
-        "NexximAMI": 20,
-        "NexximOscillatorRSF": 21,
-        "NexximOscillator1T": 22,
-        "NexximOscillatorNT": 23,
-        "NexximHarmonicBalance1T": 24,
-        "NexximHarmonicBalanceNT": 25,
-        "NexximSystem": 26,
-        "NexximTVNoise": 27,
-        "HSPICE": 28,
-        "HFSS3DLayout": 29,
-        "Open": 30,
-        "Close": 31,
-        "Thermal": 32,
-        "Modal": 33,
-        "IRIM": 34,
-        "ORIM": 34,
-        "SRIM": 34,
-        "WRIM": 34,
-        "DFIG": 34,
-        "AFIM": 34,
-        "HM": 34,
-        "RFSM": 34,
-        "RASM": 34,
-        "RSM": 34,
-        "ISM": 34,
-        "APSM": 34,
-        "IBDM": 34,
-        "ABDM": 34,
-        "TPIM": 34,
-        "SPIM": 34,
-        "TPSM": 34,
-        "BLDC": 34,
-        "ASSM": 34,
-        "PMDC": 34,
-        "SRM": 34,
-        "LSSM": 34,
-        "UNIM": 34,
-        "DCM": 34,
-        "CPSM": 34,
-        "NSSM": 34,
-        "TR": 35,
-        "TransientTemperatureAndFlow": 36,
-        "TransientTemperatureOnly": 37,
-        "TransientFlowOnly": 38,
-        "Structural": 39,
-    }
 
     SetupTemplates = {
         0: HFSSDrivenAuto,
@@ -1711,6 +1835,9 @@ class SetupKeys(object):
         37: TransientTemperatureOnly,
         38: TransientFlowOnly,
         39: MechStructural,
+        40: SiwaveDC3DLayout,
+        41: SiwaveAC3DLayout,
+        42: LNA3DLayout,
     }
 
     SetupNames = [
@@ -1754,47 +1881,31 @@ class SetupKeys(object):
         "IcepakTransient",
         "IcepakTransient",
         "MechStructural",
+        "SiwaveDC3DLayout",
+        "SiwaveAC3DLayout",
+        "LNA3DLayout",
     ]
 
-    defaultAdaptive = {
-        "DrivenModal": "LastAdaptive",
-        "DrivenTerminal": "LastAdaptive",
-        "Eigenmode": "LastAdaptive",
-        "Transient Network": "Transient",
-        "SBR+": None,
-        "Transient": "Transient",
-        "Magnetostatic": "LastAdaptive",
-        "EddyCurrent": "LastAdaptive",
-        "Electrostatic": "LastAdaptive",
-        "ElectroDCConduction": "LastAdaptive",
-        "ElectricTransient": "Transient",
-        "teadyStateTemperatureAndFlow": "SteadyState",
-        "SteadyStateTemperatureOnly": "SteadyState",
-        "SteadyStateFlowOnly": "SteadyState",
-        "SteadyState": "SteadyState",
-        "Matrix": "LastAdaptive",
-        "NexximLNA": None,
-        "NexximDC": None,
-        "NexximTransient": None,
-        "NexximQuickEye": None,
-        "NexximVerifEye": None,
-        "NexximAMI": None,
-        "NexximOscillatorRSF": None,
-        "NexximOscillator1T": None,
-        "NexximOscillatorNT": None,
-        "NexximHarmonicBalance1T": None,
-        "NexximHarmonicBalanceNT": None,
-        "NexximSystem": None,
-        "NexximTVNoise": None,
-        "HSPICE": None,
-        "HFSS3DLayout": None,
-        "2DMatrix": "LastAdaptive",
-        "MechThermal": "Solution",
-        "MechModal": "Solution",
-        "GRM": "LastAdaptive",
-        "TR": None,
-        "TransientTemperatureAndFlow": "SteadyState",
-        "TransientTemperatureOnly": "Transient",
-        "TransientFlowOnly": "Transient",
-        "Structural": "Solution",
-    }
+
+class SetupProps(OrderedDict):
+    """AEDT Boundary Component Internal Parameters."""
+
+    def __setitem__(self, key, value):
+        OrderedDict.__setitem__(self, key, value)
+        if self._pyaedt_setup.auto_update:
+            res = self._pyaedt_setup.update()
+            if not res:
+                self._pyaedt_setup._app.logger.warning("Update of %s Failed. Check needed arguments", key)
+
+    def __init__(self, setup, props):
+        OrderedDict.__init__(self)
+        if props:
+            for key, value in props.items():
+                if isinstance(value, (dict, OrderedDict)):
+                    OrderedDict.__setitem__(self, key, SetupProps(setup, value))
+                else:
+                    OrderedDict.__setitem__(self, key, value)
+        self._pyaedt_setup = setup
+
+    def _setitem_without_update(self, key, value):
+        OrderedDict.__setitem__(self, key, value)

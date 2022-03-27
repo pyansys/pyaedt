@@ -1,13 +1,22 @@
+# -*- coding: utf-8 -*-
 """
 This module contains the `Materials` class.
 """
-from __future__ import absolute_import
+from __future__ import absolute_import  # noreorder
 
-import json
 import copy
+import json
+import os
+
 from pyaedt.generic.DataHandlers import _arg2dict
-from pyaedt.generic.general_methods import aedt_exception_handler, _retry_ntimes, generate_unique_name
-from pyaedt.modules.Material import Material, SurfaceMaterial, MatProperties, OrderedDict
+from pyaedt.generic.general_methods import _retry_ntimes
+from pyaedt.generic.general_methods import generate_unique_name
+from pyaedt.generic.general_methods import is_ironpython
+from pyaedt.generic.general_methods import pyaedt_function_handler
+from pyaedt.modules.Material import Material
+from pyaedt.modules.Material import MatProperties
+from pyaedt.modules.Material import OrderedDict
+from pyaedt.modules.Material import SurfaceMaterial
 
 
 class Materials(object):
@@ -20,12 +29,14 @@ class Materials(object):
 
     Examples
     --------
-    >>>from pyaedt import Hfss
-    >>>app = Hfss()
-    >>>materials = app.materials
+    >>> from pyaedt import Hfss
+    >>> app = Hfss()
+    >>> materials = app.materials
     """
+
     def __init__(self, app):
         self._app = app
+        self._color_id = 0
         self.odefinition_manager = self._app.odefinition_manager
         self.omaterial_manager = self._app.omaterial_manager
         self._desktop = self._app.odesktop
@@ -50,7 +61,37 @@ class Materials(object):
         elif item in list(self.surface_material_keys.keys()):
             return self.surface_material_keys[item]
 
-    @aedt_exception_handler
+    @property
+    def liquids(self):
+        """Return the liquids materials. A liquid is a fluid with density greater or equal to 100Kg/m3.
+
+        Returns
+        -------
+        list
+            List of fluid materials.
+        """
+        mats = []
+        for el, val in self.material_keys.items():
+            if val.thermal_material_type == "Fluid" and val.mass_density.value and float(val.mass_density.value) >= 100:
+                mats.append(el)
+        return mats
+
+    @property
+    def gases(self):
+        """Return the gas materials. A gas is a fluid with density lower than 100Kg/m3.
+
+        Returns
+        -------
+        list
+            List of all Gas materials.
+        """
+        mats = []
+        for el, val in self.material_keys.items():
+            if val.thermal_material_type == "Fluid" and val.mass_density.value and float(val.mass_density.value) < 100:
+                mats.append(el)
+        return mats
+
+    @pyaedt_function_handler()
     def _get_materials(self):
         """Get materials."""
         mats = {}
@@ -63,7 +104,7 @@ class Materials(object):
             pass
         return mats
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _get_surface_materials(self):
         mats = {}
         try:
@@ -77,7 +118,7 @@ class Materials(object):
             pass
         return mats
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def checkifmaterialexists(self, mat):
         """Check if a material exists in AEDT.
 
@@ -110,7 +151,7 @@ class Materials(object):
             else:
                 return False
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def check_thermal_modifier(self, mat):
         """Check a material to see if it has any thermal modifiers.
 
@@ -140,7 +181,7 @@ class Materials(object):
                     return True
         return False
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def add_material(self, materialname, props=None):
         """Add a material with default values.
 
@@ -178,18 +219,16 @@ class Materials(object):
         materialname = materialname.lower()
         self.logger.info("Adding new material to the Project Library: " + materialname)
         if materialname in self.material_keys:
-            self.logger.warning(
-                "Warning. The material is already in the database. Change or edit the name."
-            )
+            self.logger.warning("Warning. The material is already in the database. Change or edit the name.")
             return self.material_keys[materialname]
         else:
-            material = Material(self._app, materialname, props)
+            material = Material(self, materialname, props)
             material.update()
             self.logger.info("Material has been added. Edit it to update in Desktop.")
             self.material_keys[materialname] = material
             return self.material_keys[materialname]
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def add_surface_material(self, material_name, emissivity=None):
         """Add a surface material.
 
@@ -225,9 +264,7 @@ class Materials(object):
         materialname = material_name.lower()
         self.logger.info("Adding a surface material to the project library: " + materialname)
         if materialname in self.surface_material_keys:
-            self.logger.warning(
-                "Warning. The material is already in the database. Change the name or edit it."
-            )
+            self.logger.warning("Warning. The material is already in the database. Change the name or edit it.")
             return self.surface_material_keys[materialname]
         else:
             material = SurfaceMaterial(self._app, materialname)
@@ -238,7 +275,7 @@ class Materials(object):
             self.surface_material_keys[materialname] = material
             return self.surface_material_keys[materialname]
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _create_mat_project_vars(self, matlist):
         matprop = {}
         tol = 1e-12
@@ -258,7 +295,7 @@ class Materials(object):
                 pass
         return matprop
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def add_material_sweep(self, swargs, matname):
         """Create a sweep material made of an array of materials.
 
@@ -306,7 +343,7 @@ class Materials(object):
 
         mat_dict = self._create_mat_project_vars(matsweep)
 
-        newmat = Material(self._app, matname)
+        newmat = Material(self, matname)
         index = "$ID" + matname
         self._app[index] = 0
         for el in mat_dict:
@@ -319,7 +356,7 @@ class Materials(object):
         self.material_keys[matname] = newmat
         return index
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def duplicate_material(self, material, new_name):
         """Duplicate a material.
 
@@ -356,7 +393,7 @@ class Materials(object):
         self.material_keys[new_name.lower()] = newmat
         return newmat
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def duplicate_surface_material(self, material, new_name):
         """Duplicate a surface material.
 
@@ -392,7 +429,7 @@ class Materials(object):
         self.surface_material_keys[new_name.lower()] = newmat
         return newmat
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def remove_material(self, material, library="Project"):
         """Remove a material.
 
@@ -423,11 +460,12 @@ class Materials(object):
         >>> hfss.materials.remove_material("MyMaterial")
 
         """
-        if material not in list(self.material_keys.keys()):
-            self.logger.error("Material {} is not present".format(material))
+        mat = material.lower()
+        if mat not in list(self.material_keys.keys()):
+            self.logger.error("Material {} is not present".format(mat))
             return False
-        self.odefinition_manager.RemoveMaterial(material, True, "", library)
-        del self.material_keys[material]
+        self.odefinition_manager.RemoveMaterial(mat, True, "", library)
+        del self.material_keys[mat]
         return True
 
     @property
@@ -453,7 +491,7 @@ class Materials(object):
         Returns
         -------
         list
-            List of dielctrics in the material database.
+            List of dielectrics in the material database.
 
         """
         data = []
@@ -471,7 +509,7 @@ class Materials(object):
                 except Exception as e:
                     self.logger.info("aedmattolibrary failed for material %s", el)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _aedmattolibrary(self, matname):
         matname = matname.lower()
         props = {}
@@ -484,6 +522,7 @@ class Materials(object):
         self.material_keys[matname] = newmat
         return True
 
+    @pyaedt_function_handler()
     def export_materials_to_file(self, full_json_path):
         """Export all materials to a JSON file.
 
@@ -547,11 +586,23 @@ class Materials(object):
         json_dict["materials"] = output_dict
         if datasets:
             json_dict["datasets"] = datasets
-
-        with open(full_json_path, "w") as fp:
-            json.dump(json_dict, fp, indent=4)
+        if not is_ironpython:
+            with open(full_json_path, "w") as fp:
+                json.dump(json_dict, fp, indent=4)
+        else:
+            temp_path = full_json_path.replace(".json", "_temp.json")
+            with open(temp_path, "w") as fp:
+                json.dump(json_dict, fp, indent=4)
+            with open(temp_path, "r") as file:
+                filedata = file.read()
+            filedata = filedata.replace("True", "true")
+            filedata = filedata.replace("False", "false")
+            with open(full_json_path, "w") as file:
+                file.write(filedata)
+            os.remove(temp_path)
         return True
 
+    @pyaedt_function_handler()
     def import_materials_from_file(self, full_json_path):
         """Import and create materials from a JSON file.
 
@@ -566,7 +617,7 @@ class Materials(object):
             ``True`` when successful, ``False`` when failed.
 
         """
-        with open(full_json_path) as json_file:
+        with open(full_json_path, "r") as json_file:
             data = json.load(json_file)
 
         if "datasets" in list(data.keys()):

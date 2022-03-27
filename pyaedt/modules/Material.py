@@ -13,8 +13,10 @@ This module contains these data classes for creating a material library:
 
 """
 from collections import OrderedDict
-from pyaedt.generic.general_methods import aedt_exception_handler
+
+from pyaedt.generic.constants import CSS4_COLORS
 from pyaedt.generic.DataHandlers import _dict2arg
+from pyaedt.generic.general_methods import pyaedt_function_handler
 
 
 class MatProperties(object):
@@ -39,9 +41,6 @@ class MatProperties(object):
         "diffusivity",
         "molecular_mass",
         "viscosity",
-        "core_loss_kh",
-        "core_loss_kc",
-        "core_loss_ke",
     ]
     defaultvalue = [1.0, 1.0, 0, 0, 0, 0.01, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0]
     defaultunit = [
@@ -216,10 +215,11 @@ class MatProperty(object):
 
     Examples
     --------
-    >>>from pyaedt import Hfss
-    >>>app = Hfss()
-    >>>matproperty = app.materials["copper"].conductivity
+    >>> from pyaedt import Hfss
+    >>> app = Hfss()
+    >>> matproperty = app.materials["copper"].conductivity
     """
+
     def __init__(self, material, name, val=None, thermalmodifier=None):
         self._material = material
         self.logger = self._material.logger
@@ -232,6 +232,22 @@ class MatProperty(object):
         elif val is not None and val["property_type"] == "AnisoProperty":
             self.type = "anisotropic"
             self.value = [val["component1"], val["component2"], val["component3"]]
+        elif val is not None and val["property_type"] == "nonlinear":
+            self.type = "nonlinear"
+            for e, v in val.items():
+                if e == "BTypeForSingleCurve":
+                    self.btype_for_single_curve = v
+                elif e == "HUnit":
+                    self.hunit = v
+                elif e == "BUnit":
+                    self.bunit = v
+                elif e == "IsTemperatureDependent":
+                    self.is_temperature_dependent = v
+                elif e in ["BHCoordinates", "DECoordinates", "JECoordinates"]:
+                    self.value = v["Point"]
+                    self._unit = v["DimUnits"]
+                elif e == "Temperatures":
+                    self.temperatures = v
         if not isinstance(thermalmodifier, list):
             thermalmodifier = [thermalmodifier]
         for tm in thermalmodifier:
@@ -281,7 +297,9 @@ class MatProperty(object):
 
     @value.setter
     def value(self, val):
-        if isinstance(val, list):
+        if self.type == "nonlinear":
+            self._property_value[0].value = val
+        elif isinstance(val, list):
             i = 0
             for el in val:
                 if i >= len(self._property_value):
@@ -357,14 +375,21 @@ class MatProperty(object):
                     "free_form_value": formula,
                 }
             )
-            self._material._props["ModifierData"] = OrderedDict({"ThermalModifierData": OrderedDict(
-                {"modifier_data": "thermal_modifier_data",
-                 "all_thermal_modifiers": OrderedDict({"one_thermal_modifier": tm}), })})
+            self._material._props["ModifierData"] = OrderedDict(
+                {
+                    "ThermalModifierData": OrderedDict(
+                        {
+                            "modifier_data": "thermal_modifier_data",
+                            "all_thermal_modifiers": OrderedDict({"one_thermal_modifier": tm}),
+                        }
+                    )
+                }
+            )
         else:
             for tmname in self._material._props["ModifierData"]["ThermalModifierData"]["all_thermal_modifiers"]:
                 if isinstance(
-                        self._material._props["ModifierData"]["ThermalModifierData"]["all_thermal_modifiers"][tmname],
-                        list):
+                    self._material._props["ModifierData"]["ThermalModifierData"]["all_thermal_modifiers"][tmname], list
+                ):
                     found = False
                     for tm in self._material._props["ModifierData"]["ThermalModifierData"]["all_thermal_modifiers"][
                         tmname
@@ -437,9 +462,11 @@ class MatProperty(object):
                         }
                     )
                     self._material._props["ModifierData"]["ThermalModifierData"]["all_thermal_modifiers"][
-                        tmname].append(tm)
+                        tmname
+                    ].append(tm)
         return self._material.update()
 
+    @pyaedt_function_handler()
     def add_thermal_modifier_free_form(self, formula, index=0):
         """Add a thermal modifier to a material property using a free-form formula.
 
@@ -471,6 +498,7 @@ class MatProperty(object):
         self._property_value[index].thermalmodifier = formula
         return self._add_thermal_modifier(formula, index)
 
+    @pyaedt_function_handler()
     def add_thermal_modifier_dataset(self, dataset_name, index=0):
         """Add a thermal modifier to a material property using an existing dataset.
 
@@ -505,6 +533,7 @@ class MatProperty(object):
         self._property_value[index].thermalmodifier = formula
         self._add_thermal_modifier(formula, index)
 
+    @pyaedt_function_handler()
     def add_thermal_modifier_closed_form(
         self, tref=22, c1=0.0001, c2=1e-6, tl=-273.15, tu=1000, units="cel", auto_calc=True, tml=1000, tmu=1000, index=0
     ):
@@ -660,6 +689,55 @@ class MatProperty(object):
                     tml.append(tm_new)
         return self._material.update()
 
+    @pyaedt_function_handler()
+    def set_non_linear(self, point_list, x_unit=None, y_unit=None):
+        """Enable Non Linear Material.
+
+        Parameters
+        ----------
+        point_list : list of list
+            list of [x,y] nonlinear couple of points.
+        x_unit : str, optional
+            X units. Defaults will be used if `None`.
+        y_unit : str, optional
+            Y units. Defaults will be used if `None`.
+
+        Returns
+        -------
+        bool
+            `True` if succeeded.
+        """
+        if self.name not in ["permeability", "conductivity", "permittivity"]:
+            self.logger.error(
+                "Non linear parameters are only supported for permeability, conductivity and permittivity."
+            )
+            return False
+        self.type = "nonlinear"
+        self.value = point_list
+        if self.name == "permeability":
+            if not x_unit:
+                x_unit = "tesla"
+            if not y_unit:
+                y_unit = "A_per_meter"
+            self.bunit = x_unit
+            self.hunit = y_unit
+            self.is_temperature_dependent = False
+            self.btype_for_single_curve = "normal"
+            self.temperatures = OrderedDict({})
+        elif self.name == "permittivity":
+            if not x_unit:
+                x_unit = "V_per_meter"
+            if not y_unit:
+                y_unit = "C_per_m2"
+            self._unit = [x_unit, y_unit]
+        elif self.name == "conductivity":
+            if not x_unit:
+                x_unit = "V_per_meter"
+            if not y_unit:
+                y_unit = "A_per_m2"
+            self._unit = [x_unit, y_unit]
+        return self._material._update_props(self.name, self.value)
+
 
 class CommonMaterial(object):
     """Manages datasets with frequency-dependent materials.
@@ -674,6 +752,7 @@ class CommonMaterial(object):
         The default is ``None``.
 
     """
+
     def __init__(self, materials, name, props=None):
         self._materials = materials
         self.odefinition_manager = self._materials.odefinition_manager
@@ -684,7 +763,7 @@ class CommonMaterial(object):
         self.name = name
         self.coordinate_system = ""
         if props:
-            self._props = props
+            self._props = props.copy()
         else:
             self._props = OrderedDict()
         if "CoordinateSystemType" in self._props:
@@ -706,7 +785,7 @@ class CommonMaterial(object):
             self.mod_since_lib = self._props["ModSinceLib"]
             del self._props["ModSinceLib"]
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _get_args(self, props=None):
         """Retrieve the arguments for a property.
 
@@ -741,6 +820,9 @@ class CommonMaterial(object):
         ):
             i = 1
             for val in provpavlue:
+                if not self._props.get(propname, None) or isinstance(self._props[propname], str):
+                    self._props[propname] = OrderedDict({"property_type": "AnisoProperty"})
+                    self._props[propname]["unit"] = ""
                 self._props[propname]["component" + str(i)] = str(val)
                 i += 1
             if update_aedt:
@@ -749,8 +831,39 @@ class CommonMaterial(object):
             self._props[propname] = str(provpavlue)
             if update_aedt:
                 return self.update()
-        else:
-            return False
+        elif isinstance(provpavlue, list) and self.__dict__["_" + propname].type == "nonlinear":
+            if propname == "permeability":
+                bh = OrderedDict({"DimUnits": ["", ""]})
+                for point in provpavlue:
+                    if "Point" in bh:
+                        bh["Point"].append(point)
+                    else:
+                        bh["Point"] = [point]
+                self._props[propname] = OrderedDict({"property_type": "nonlinear"})
+                self._props[propname]["BTypeForSingleCurve"] = self.__dict__["_" + propname].btype_for_single_curve
+                self._props[propname]["HUnit"] = self.__dict__["_" + propname].hunit
+                self._props[propname]["BUnit"] = self.__dict__["_" + propname].bunit
+                self._props[propname]["IsTemperatureDependent"] = self.__dict__["_" + propname].is_temperature_dependent
+                self._props[propname]["BHCoordinates"] = bh
+                try:
+                    self._props[propname]["BHCoordinates"]["Temperatures"] = self.__dict__["_" + propname].temperatures
+                except:
+                    self._props[propname]["BHCoordinates"]["Temperatures"] = OrderedDict({})
+            else:
+                bh = OrderedDict({"DimUnits": [self.__dict__["_" + propname]._unit]})
+                for point in provpavlue:
+                    if "Point" in bh:
+                        bh["Point"].append(point)
+                    else:
+                        bh["Point"] = [point]
+                if propname == "conductivity":
+                    pr_name = "JECoordinates"
+                else:
+                    pr_name = "DECoordinates"
+                self._props[propname] = OrderedDict({"property_type": "nonlinear", pr_name: bh})
+            if update_aedt:
+                return self.update()
+        return False
 
 
 class Material(CommonMaterial, object):
@@ -767,9 +880,9 @@ class Material(CommonMaterial, object):
 
     Examples
     --------
-    >>>from pyaedt import Hfss
-    >>>app = Hfss()
-    >>>material = app.materials["copper"]
+    >>> from pyaedt import Hfss
+    >>> app = Hfss()
+    >>> material = app.materials["copper"]
     """
 
     def __init__(self, materiallib, name, props=None):
@@ -782,21 +895,30 @@ class Material(CommonMaterial, object):
         else:
             self.physics_type = ["Electromagnetic", "Thermal", "Structural"]
             self._props["PhysicsTypes"] = OrderedDict({"set": ["Electromagnetic", "Thermal", "Structural"]})
-        if "AttachedData" in self._props:
+        if "AttachedData" in self._props and "MatAppearanceData" in self._props["AttachedData"]:
             self._material_appearance = []
             self._material_appearance.append(self._props["AttachedData"]["MatAppearanceData"]["Red"])
             self._material_appearance.append(self._props["AttachedData"]["MatAppearanceData"]["Green"])
             self._material_appearance.append(self._props["AttachedData"]["MatAppearanceData"]["Blue"])
         else:
-            self._material_appearance = [128, 128, 128]
+            vals = list(CSS4_COLORS.values())
+            if (materiallib._color_id) > len(vals):
+                materiallib._color_id = 0
+            h = vals[materiallib._color_id].lstrip("#")
+            self._material_appearance = list(int(h[i : i + 2], 16) for i in (0, 2, 4))
+            materiallib._color_id += 1
             self._props["AttachedData"] = OrderedDict(
                 {
                     "MatAppearanceData": OrderedDict(
-                        {"property_data": "appearance_data", "Red": 128, "Green": 128, "Blue": 128}
+                        {
+                            "property_data": "appearance_data",
+                            "Red": self._material_appearance[0],
+                            "Green": self._material_appearance[1],
+                            "Blue": self._material_appearance[2],
+                        }
                     )
                 }
             )
-
         for property in MatProperties.aedtname:
             if property in self._props:
                 mods = None
@@ -874,7 +996,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str
+        :class:`pyaedt.modules.Material.MatProperty`
             Permittivity of the material.
 
         References
@@ -886,8 +1008,16 @@ class Material(CommonMaterial, object):
 
     @permittivity.setter
     def permittivity(self, value):
-        self._permittivity.value = value
-        self._update_props("permittivity", value)
+        if isinstance(value, list) and isinstance(value[0], list):
+            self._permittivity.set_non_linear(value)
+        elif isinstance(value, list):
+            self._permittivity.value = value
+            self._permittivity.type = "anisotropic"
+            self._update_props("permittivity", value)
+        else:
+            self._permittivity.value = value
+            self._permittivity.type = "simple"
+            self._update_props("permittivity", value)
 
     @property
     def permeability(self):
@@ -895,7 +1025,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Permeability of the material.
 
         References
@@ -907,9 +1037,16 @@ class Material(CommonMaterial, object):
 
     @permeability.setter
     def permeability(self, value):
-
-        self._permeability.value = value
-        self._update_props("permeability", value)
+        if isinstance(value, list) and isinstance(value[0], list):
+            self._permeability.set_non_linear(value)
+        elif isinstance(value, list):
+            self._permeability.value = value
+            self._permeability.type = "anisotropic"
+            self._update_props("permeability", value)
+        else:
+            self._permeability.value = value
+            self._permeability.type = "simple"
+            self._update_props("permeability", value)
 
     @property
     def conductivity(self):
@@ -917,7 +1054,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Conductivity of the material.
 
         References
@@ -929,8 +1066,16 @@ class Material(CommonMaterial, object):
 
     @conductivity.setter
     def conductivity(self, value):
-        self._conductivity.value = value
-        self._update_props("conductivity", value)
+        if isinstance(value, list) and isinstance(value[0], list):
+            self._conductivity.set_non_linear(value)
+        elif isinstance(value, list):
+            self._conductivity.value = value
+            self._conductivity.type = "anisotropic"
+            self._update_props("conductivity", value)
+        else:
+            self._conductivity.value = value
+            self._conductivity.type = "simple"
+            self._update_props("conductivity", value)
 
     @property
     def dielectric_loss_tangent(self):
@@ -938,7 +1083,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.MatProperty`
             Dielectric loss tangent of the material.
         """
         return self._dielectric_loss_tangent
@@ -954,7 +1099,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Magnetic loss tangent of the material.
 
         References
@@ -975,7 +1120,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Thermal conductivity of the material.
 
         References
@@ -990,7 +1135,12 @@ class Material(CommonMaterial, object):
         self._thermal_conductivity.value = value
         self.physics_type = ["Electromagnetic", "Thermal", "Structural"]
         self._props["PhysicsTypes"] = OrderedDict({"set": ["Electromagnetic", "Thermal", "Structural"]})
-        self._update_props("thermal_conductivity", value)
+        if isinstance(value, list):
+            self._thermal_conductivity.type = "anisotropic"
+            self._update_props("thermal_conductivity", value)
+        else:
+            self._thermal_conductivity.type = "simple"
+            self._update_props("thermal_conductivity", value)
 
     @property
     def mass_density(self):
@@ -998,7 +1148,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Mass density of the material.
 
         References
@@ -1019,7 +1169,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Specific heat of the material.
 
         References
@@ -1040,7 +1190,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Thermal expansion coefficient of the material.
 
         References
@@ -1061,7 +1211,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Young's modulus of the material.
 
         References
@@ -1084,7 +1234,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Poisson's ratio of the material.
 
         References
@@ -1107,7 +1257,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Diffusivity of the material.
 
         References
@@ -1128,7 +1278,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Molecular mass of the material.
 
         References
@@ -1149,7 +1299,7 @@ class Material(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Viscosity of the material.
 
         References
@@ -1164,69 +1314,266 @@ class Material(CommonMaterial, object):
         self._viscosity.value = value
         self._update_props("viscosity", value)
 
-    @property
-    def core_loss_kh(self):
-        """Core loss in kilohertz.
+    @pyaedt_function_handler()
+    def set_magnetic_coercitivity(self, value=0, x=1, y=0, z=0):
+        """Set Magnetic Coercitivity for material.
+
+        Parameters
+        ----------
+        value : float, optional
+            Magnitude in A_per_meter. Default value is ``0``.
+        x : float, optional
+            Vector x component. Default value is ``1``.
+        y : float, optional
+            Vector y component. Default value is ``0``.
+        z : float, optional
+            Vector z component. Default value is ``0``.
 
         Returns
         -------
-        str or float
-            Core loss of the material in kilohertz.
-
-        References
-        ----------
-
-        >>> oDefinitionManager.EditMaterial
+        bool
         """
-        return self._core_loss_kh
+        self._props["magnetic_coercivity"] = OrderedDict(
+            {
+                "property_type": "VectorProperty",
+                "Magnitude": "{}A_per_meter".format(value),
+                "DirComp1": str(x),
+                "DirComp2": str(y),
+                "DirComp3": str(z),
+            }
+        )
+        return self.update()
 
-    @core_loss_kh.setter
-    def core_loss_kh(self, value):
-        self._core_loss_kh.value = value
-        self._update_props("core_loss_kh", value)
+    @pyaedt_function_handler()
+    def set_electrical_steel_coreloss(self, kh=0, kc=0, ke=0, kdc=0, cut_depth=0.0001):
+        """Set Electrical Steel Type Core Loss.
 
-    @property
-    def core_loss_kc(self):
-        """Core loss in kilocalories.
+        Parameters
+        ----------
+        kh : float
+        kc : float
+        ke : float
+        kdc : float
+        cut_depth : float
 
         Returns
         -------
-        str or float
-            Core loss of the material in kilocalories.
-
-        References
-        ----------
-
-        >>> oDefinitionManager.EditMaterial
+        bool
         """
-        return self._core_loss_kc
+        if "core_loss_type" not in self._props:
+            self._props["core_loss_type"] = OrderedDict(
+                {"property_type": "ChoiceProperty", "Choice": "Electrical Steel"}
+            )
+        else:
+            self._props.pop("core_loss_cm", None)
+            self._props.pop("core_loss_x", None)
+            self._props.pop("core_loss_y", None)
+            self._props.pop("core_loss_hci", None)
+            self._props.pop("core_loss_br", None)
+            self._props.pop("core_loss_hkc", None)
+            self._props.pop("core_loss_curves", None)
+            self._props["core_loss_type"]["Choice"] = "Electrical Steel"
+        self._props["core_loss_kh"] = str(kh)
+        self._props["core_loss_kc"] = str(kc)
+        self._props["core_loss_ke"] = str(ke)
+        self._props["core_loss_kdc"] = str(kdc)
+        self._props["core_loss_equiv_cut_depth"] = "{}meter".format(cut_depth)
+        return self.update()
 
-    @core_loss_kc.setter
-    def core_loss_kc(self, value):
-        self._core_loss_kc.value = value
-        self._update_props("core_loss_kc", value)
+    @pyaedt_function_handler()
+    def set_hysteresis_coreloss(self, kdc=0, hci=0, br=0, hkc=0, cut_depth=0.0001):
+        """Set Hysteresis Type Core Loss.
 
-    @property
-    def core_loss_ke(self):
-        """Core loss in kinetic energy.
+        Parameters
+        ----------
+        kdc : float
+        hci : float
+        br : float
+        hkc : float
+        cut_depth : float
 
         Returns
         -------
-        type
-            Core loss of the material in kinetic energy.
-
-        References
-        ----------
-
-        >>> oDefinitionManager.EditMaterial
+        bool
         """
-        return self._core_loss_ke
+        if "core_loss_type" not in self._props:
+            self._props["core_loss_type"] = OrderedDict(
+                {"property_type": "ChoiceProperty", "Choice": "Hysteresis Model"}
+            )
+        else:
+            self._props.pop("core_loss_kh", None)
+            self._props.pop("core_loss_kc", None)
+            self._props.pop("core_loss_ke", None)
+            self._props.pop("core_loss_cm", None)
+            self._props.pop("core_loss_x", None)
+            self._props.pop("core_loss_y", None)
+            self._props.pop("core_loss_hci", None)
+            self._props.pop("core_loss_br", None)
+            self._props.pop("core_loss_hkc", None)
+            self._props.pop("core_loss_curves", None)
+            self._props["core_loss_type"]["Choice"] = "Hysteresis Model"
+        self._props["core_loss_hci"] = "{}A_per_meter".format(hci)
+        self._props["core_loss_br"] = "{}tesla".format(br)
+        self._props["core_loss_hkc"] = str(hkc)
+        self._props["core_loss_kdc"] = str(kdc)
+        self._props["core_loss_equiv_cut_depth"] = "{}meter".format(cut_depth)
+        return self.update()
 
-    @core_loss_ke.setter
-    def core_loss_ke(self, value):
-        self._core_loss_ke.value = value
-        self._update_props("core_loss_ke", value)
+    @pyaedt_function_handler()
+    def set_power_ferrite_coreloss(self, cm=0, x=0, y=0, kdc=0, cut_depth=0.0001):
+        """Set Power Ferrite Type Core Loss.
 
+        Parameters
+        ----------
+        cm : float
+        x : float
+        y : float
+        kdc : float
+        cut_depth : float
+
+        Returns
+        -------
+        bool
+        """
+        if "core_loss_type" not in self._props:
+            self._props["core_loss_type"] = OrderedDict({"property_type": "ChoiceProperty", "Choice": "Power Ferrite"})
+        else:
+            self._props.pop("core_loss_kh", None)
+            self._props.pop("core_loss_kc", None)
+            self._props.pop("core_loss_ke", None)
+            self._props.pop("core_loss_cm", None)
+            self._props.pop("core_loss_x", None)
+            self._props.pop("core_loss_y", None)
+            self._props.pop("core_loss_hci", None)
+            self._props.pop("core_loss_br", None)
+            self._props.pop("core_loss_hkc", None)
+            self._props.pop("core_loss_curves", None)
+            self._props["core_loss_type"]["Choice"] = "Power Ferrite"
+        self._props["core_loss_cm"] = "{}A_per_meter".format(cm)
+        self._props["core_loss_x"] = "{}tesla".format(x)
+        self._props["core_loss_y"] = str(y)
+        self._props["core_loss_kdc"] = str(kdc)
+        self._props["core_loss_equiv_cut_depth"] = "{}meter".format(cut_depth)
+        return self.update()
+
+    @pyaedt_function_handler()
+    def set_bp_curve_coreloss(
+        self, point_list, kdc=0, cut_depth=0.0001, punit="kw/m^3", bunit="tesla", frequency=60, thickness="0.5mm"
+    ):
+        """Set B-P Type Core Loss.
+
+        Parameters
+        ----------
+        point_list : list of list
+            List of [x,y] points.
+        kdc : float
+        cut_depth : float
+        punit : str
+            Core loss unit. The default is ``"kw/m^3"``.
+        bunit : str
+            Magnetic field unit. The default is ``"tesla"``.
+        frequency : float
+        thickness : str, optional
+            Lamination thickness. The default is ``"0.5mm"``.
+
+        Returns
+        -------
+        bool
+        """
+        if "core_loss_type" not in self._props:
+            self._props["core_loss_type"] = OrderedDict({"property_type": "ChoiceProperty", "Choice": "B-P Curve"})
+        else:
+            self._props.pop("core_loss_kh", None)
+            self._props.pop("core_loss_kc", None)
+            self._props.pop("core_loss_ke", None)
+            self._props.pop("core_loss_cm", None)
+            self._props.pop("core_loss_x", None)
+            self._props.pop("core_loss_y", None)
+            self._props.pop("core_loss_hci", None)
+            self._props.pop("core_loss_br", None)
+            self._props.pop("core_loss_hkc", None)
+            self._props.pop("core_loss_curves", None)
+            self._props["core_loss_type"]["Choice"] = "B-P Curve"
+        self._props["core_loss_kdc"] = str(kdc)
+        self._props["core_loss_equiv_cut_depth"] = "{}meter".format(cut_depth)
+        self._props["core_loss_curves"] = OrderedDict({})
+        self._props["core_loss_curves"]["property_type"] = "nonlinear"
+        self._props["core_loss_curves"]["PUnit"] = punit
+        self._props["core_loss_curves"]["BUnit"] = bunit
+        self._props["core_loss_curves"]["Frequency"] = "{}Hz".format(frequency)
+        self._props["core_loss_curves"]["Thickness"] = thickness
+        self._props["core_loss_curves"]["IsTemperatureDependent"] = False
+        self._props["core_loss_curves"]["Point"] = []
+        for points in point_list:
+            self._props["core_loss_curves"]["Point"].append(points)
+        return self.update()
+
+    @pyaedt_function_handler()
+    def get_curve_coreloss_type(self):
+        """Return the curve core loss type assigned to material.
+
+        Returns
+        -------
+        str
+        """
+        if self._props.get("core_loss_type", None):
+            return self._props["core_loss_type"].get("Choice", None)
+        return None
+
+    @pyaedt_function_handler()
+    def get_curve_coreloss_values(self):
+        """Return the curve core values type assigned to material.
+
+        Returns
+        -------
+        dict
+        """
+        out = {}
+        if self._props.get("core_loss_type", None):
+            if self._props["core_loss_type"].get("Choice", None) == "Electrical Steel":
+
+                out["core_loss_kh"] = self._props["core_loss_kh"]
+                out["core_loss_kc"] = self._props["core_loss_kc"]
+                out["core_loss_ke"] = self._props["core_loss_ke"]
+                out["core_loss_kdc"] = self._props["core_loss_kdc"]
+                out["core_loss_equiv_cut_depth"] = self._props["core_loss_equiv_cut_depth"]
+            elif self._props["core_loss_type"].get("Choice", None) == "B-P Curve":
+                out["core_loss_curves"] = self._props["core_loss_curves"]
+                out["core_loss_kdc"] = self._props["core_loss_kdc"]
+                out["core_loss_equiv_cut_depth"] = self._props["core_loss_equiv_cut_depth"]
+            if self._props["core_loss_type"].get("Choice", None) == "Power Ferrite":
+                out["core_loss_cm"] = self._props["core_loss_cm"]
+                out["core_loss_x"] = self._props["core_loss_x"]
+                out["core_loss_y"] = self._props["core_loss_y"]
+                out["core_loss_kdc"] = self._props["core_loss_kdc"]
+                out["core_loss_equiv_cut_depth"] = self._props["core_loss_equiv_cut_depth"]
+            elif self._props["core_loss_type"].get("Choice", None) == "Hysteresis Model":
+                out["core_loss_hci"] = self._props["core_loss_hci"]
+                out["core_loss_br"] = self._props["core_loss_br"]
+                out["core_loss_hkc"] = self._props["core_loss_hkc"]
+                out["core_loss_kdc"] = self._props["core_loss_kdc"]
+                out["core_loss_equiv_cut_depth"] = self._props["core_loss_equiv_cut_depth"]
+        return out
+
+    @pyaedt_function_handler()
+    def get_magnetic_coercitivity(self):
+        """Get the magnetic coercitivity values.
+
+        Returns
+        -------
+        tuple
+            Tuple of (Magnitude, x, y, z)
+        """
+        if "magnetic_coercivity" in self._props:
+            return (
+                self._props["magnetic_coercivity"]["Magnitude"],
+                self._props["magnetic_coercivity"]["DirComp1"],
+                self._props["magnetic_coercivity"]["DirComp2"],
+                self._props["magnetic_coercivity"]["DirComp3"],
+            )
+        return False
+
+    @pyaedt_function_handler()
     def is_conductor(self, threshold=100000):
         """Check if the material is a conductor.
 
@@ -1256,7 +1603,7 @@ class Material(CommonMaterial, object):
             return False
         return False
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def is_dielectric(self, threshold=100000):
         """Check if the material is dielectric.
 
@@ -1275,7 +1622,7 @@ class Material(CommonMaterial, object):
         """
         return not self.is_conductor(threshold)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def update(self):
         """Update the material in AEDT.
 
@@ -1298,7 +1645,7 @@ class Material(CommonMaterial, object):
             self.odefinition_manager.AddMaterial(args)
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _does_material_exists(self, material_name):
         listmatprj = [i.lower() for i in list(self.odefinition_manager.GetProjectMaterialNames())]
         if material_name.lower() in listmatprj:
@@ -1359,7 +1706,7 @@ class SurfaceMaterial(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Emissivity of the surface material.
 
         References
@@ -1381,7 +1728,7 @@ class SurfaceMaterial(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Surface diffuse absorptance of the surface material.
 
         References
@@ -1403,7 +1750,7 @@ class SurfaceMaterial(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Surface incident absorptance of the surface material.
 
         References
@@ -1425,7 +1772,7 @@ class SurfaceMaterial(CommonMaterial, object):
 
         Returns
         -------
-        str or float
+        :class:`pyaedt.modules.Material.MatProperty`
             Surface roughness of the surface material.
 
         References
@@ -1440,7 +1787,7 @@ class SurfaceMaterial(CommonMaterial, object):
         self._surface_roughness.value = value
         self._update_props("surface_roughness", value)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def update(self):
         """Update the surface material in AEDT.
 
@@ -1463,7 +1810,7 @@ class SurfaceMaterial(CommonMaterial, object):
             self.odefinition_manager.AddSurfaceMaterial(args)
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _does_material_exists(self, szMat):
         a = self.odefinition_manager.DoesSurfaceMaterialExist(szMat)
         if a != 0:

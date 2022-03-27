@@ -38,7 +38,7 @@ maintainer = "Massimo Capodiferro"
 
 maintainer_email = "massimo.capodiferro@ansys.com"
 
-description = "Higher-Level Pythonic Ansys Electronics Destkop Framework"
+description = "Higher-Level Pythonic Ansys Electronics Desktop Framework"
 
 # Get the long description from the README file
 with open3(os.path.join(HERE, "README.rst"), encoding="utf-8") as f:
@@ -52,14 +52,15 @@ packages = [
     "pyaedt.modules",
     "pyaedt.generic",
     "pyaedt.edb_core",
+    "pyaedt.emit_core",
     "pyaedt.examples",
     "pyaedt.rpc",
     "pyaedt.third_party",
     "pyaedt.third_party.ironpython",
-    "pyaedt.third_party.ironpython.rpyc",
-    "pyaedt.third_party.ironpython.rpyc.core",
-    "pyaedt.third_party.ironpython.rpyc.lib",
-    "pyaedt.third_party.ironpython.rpyc.utils",
+    "pyaedt.third_party.ironpython.rpyc_27",
+    "pyaedt.third_party.ironpython.rpyc_27.core",
+    "pyaedt.third_party.ironpython.rpyc_27.lib",
+    "pyaedt.third_party.ironpython.rpyc_27.utils",
     "pyaedt.third_party.ironpython.plumbum",
     "pyaedt.third_party.ironpython.plumbum.cli",
     "pyaedt.third_party.ironpython.plumbum.colorlib",
@@ -73,6 +74,7 @@ data_files = [
     ("dlls", recursive_glob(os.path.join("pyaedt", "dlls"), "*")),
     ("misc", recursive_glob(os.path.join("pyaedt", "misc"), "*")),
     ("License", recursive_glob(".", "*.md")),
+    ("xaml", ["pyaedt/generic/wpf_template.xaml"]),
     ("version", ["pyaedt/version.txt"]),
     ("setup-distutils", ["setup-distutils.py"]),
 ]

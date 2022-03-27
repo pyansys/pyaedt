@@ -1,11 +1,12 @@
 import os
+import warnings
 
-from pyaedt.generic.general_methods import aedt_exception_handler, is_ironpython
+from pyaedt.application.Analysis import Analysis
+from pyaedt.generic.general_methods import is_ironpython
+from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.modeler.Model3DLayout import Modeler3DLayout
 from pyaedt.modules.Mesh3DLayout import Mesh3d
-from pyaedt.modules.SetupTemplates import SetupKeys
 from pyaedt.modules.SolveSetup import Setup3DLayout
-from pyaedt.application.Analysis import Analysis
 
 if is_ironpython:
     from pyaedt.modules.PostProcessor import PostProcessor
@@ -88,7 +89,7 @@ class FieldAnalysis3DLayout(Analysis):
         self._oboundary = self._odesign.GetModule("Excitations")
         self.logger.info("Analysis Loaded")
         self._modeler = Modeler3DLayout(self)
-        self._modeler.primitives.init_padstacks()
+        self._modeler.init_padstacks()
         self.logger.info("Modeler Loaded")
         self._mesh = Mesh3d(self)
         self._post = PostProcessor(self)
@@ -138,8 +139,28 @@ class FieldAnalysis3DLayout(Analysis):
         return self._mesh
 
     @property
+    def excitations(self):
+        """Excitation names.
+
+        Returns
+        -------
+        list
+            List of excitation names. Excitations with multiple modes will return one
+            excitation for each mode.
+
+        References
+        ----------
+
+        >>> oModule.GetExcitations
+        """
+        return list(self.oboundary.GetAllPortsList())
+
+    @property
     def get_excitations_name(self):
         """Excitation names.
+
+        .. deprecated:: 0.4.27
+           Use :func:`excitations` property instead.
 
         Returns
         -------
@@ -151,7 +172,8 @@ class FieldAnalysis3DLayout(Analysis):
 
         >>> oModule.GetAllPortsList
         """
-        return list(self.oboundary.GetAllPortsList())
+        warnings.warn("`get_excitations_name` is deprecated. Use `excitations` property instead.", DeprecationWarning)
+        return self.excitations
 
     @property
     def get_all_sparameter_list(self, excitation_names=[]):
@@ -172,7 +194,7 @@ class FieldAnalysis3DLayout(Analysis):
 
         """
         if not excitation_names:
-            excitation_names = self.get_excitations_name
+            excitation_names = self.excitations
         spar = []
         k = 0
         for i in excitation_names:
@@ -182,7 +204,7 @@ class FieldAnalysis3DLayout(Analysis):
                 k += 1
         return spar
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def export_mesh_stats(self, setup_name, variation_string="", mesh_path=None):
         """Export mesh statistics to a file.
 
@@ -193,7 +215,7 @@ class FieldAnalysis3DLayout(Analysis):
         variation_string : str, optional
             Variation List.
         mesh_path : str, optional
-            Full path to mesh statistics file.
+            Full path to mesh statistics file. If `None` working_directory will be used.
 
         Returns
         -------
@@ -206,11 +228,11 @@ class FieldAnalysis3DLayout(Analysis):
         >>> oModule.ExportMeshStats
         """
         if not mesh_path:
-            mesh_path = os.path.join(self.project_path, "meshstats.ms")
+            mesh_path = os.path.join(self.working_directory, "meshstats.ms")
         self.odesign.ExportMeshStats(setup_name, variation_string, mesh_path)
         return mesh_path
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_all_return_loss_list(self, excitation_names=[], excitation_name_prefix=""):
         """Retrieve a list of all return losses for a list of excitations.
 
@@ -235,7 +257,7 @@ class FieldAnalysis3DLayout(Analysis):
         >>> oModule.GetAllPorts
         """
         if not excitation_names:
-            excitation_names = self.get_excitations_name
+            excitation_names = self.excitations
         if excitation_name_prefix:
             excitation_names = [i for i in excitation_names if excitation_name_prefix.lower() in i.lower()]
         spar = []
@@ -243,7 +265,7 @@ class FieldAnalysis3DLayout(Analysis):
             spar.append("S({},{})".format(i, i))
         return spar
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_all_insertion_loss_list(self, trlist=[], reclist=[], tx_prefix="", rx_prefix=""):
         """Retrieve a list of all insertion losses from two lists of excitations (driver and receiver).
 
@@ -272,9 +294,9 @@ class FieldAnalysis3DLayout(Analysis):
         """
         spar = []
         if not trlist:
-            trlist = [i for i in self.get_excitations_name if tx_prefix in i]
+            trlist = [i for i in self.excitations if tx_prefix in i]
         if not reclist:
-            reclist = [i for i in self.get_excitations_name if rx_prefix in i]
+            reclist = [i for i in self.excitations if rx_prefix in i]
         if len(trlist) != len(reclist):
             self.logger.error("The TX and RX lists should be same length.")
             return False
@@ -282,7 +304,7 @@ class FieldAnalysis3DLayout(Analysis):
             spar.append("S({},{})".format(i, j))
         return spar
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_next_xtalk_list(self, trlist=[], tx_prefix=""):
         """Retrieve a list of all the near end XTalks from a list of excitations (driver and receiver).
 
@@ -306,7 +328,7 @@ class FieldAnalysis3DLayout(Analysis):
         """
         next = []
         if not trlist:
-            trlist = [i for i in self.get_excitations_name if tx_prefix in i]
+            trlist = [i for i in self.excitations if tx_prefix in i]
         for i in trlist:
             k = trlist.index(i) + 1
             while k < len(trlist):
@@ -314,7 +336,7 @@ class FieldAnalysis3DLayout(Analysis):
                 k += 1
         return next
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_fext_xtalk_list(self, trlist=[], reclist=[], tx_prefix="", rx_prefix="", skip_same_index_couples=True):
         """Retrieve a list of all the far end XTalks from two lists of exctitations (driver and receiver).
 
@@ -347,9 +369,9 @@ class FieldAnalysis3DLayout(Analysis):
         """
         fext = []
         if not trlist:
-            trlist = [i for i in self.get_excitations_name if tx_prefix in i]
+            trlist = [i for i in self.excitations if tx_prefix in i]
         if not reclist:
-            reclist = [i for i in self.get_excitations_name if rx_prefix in i]
+            reclist = [i for i in self.excitations if rx_prefix in i]
         for i in trlist:
             for k in reclist:
                 if not skip_same_index_couples or reclist.index(k) != trlist.index(i):
@@ -388,7 +410,7 @@ class FieldAnalysis3DLayout(Analysis):
         setups = list(self.oanalysis.GetSetups())
         return setups
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_setup(self, setupname="MySetupAuto", setuptype=None, props={}):
         """Create a setup.
 
@@ -412,7 +434,7 @@ class FieldAnalysis3DLayout(Analysis):
         >>> oModule.Add
         """
         if setuptype is None:
-            setuptype = SetupKeys.defaultSetups[self.solution_type]
+            setuptype = self.design_solutions.default_setup
         name = self.generate_unique_setup_name(setupname)
         setup = Setup3DLayout(self, setuptype, name)
         setup.create()
@@ -424,7 +446,7 @@ class FieldAnalysis3DLayout(Analysis):
         self.setups.append(setup)
         return setup
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_setup(self, setupname, setuptype=None):
         """Retrieve a setup.
 
@@ -443,7 +465,7 @@ class FieldAnalysis3DLayout(Analysis):
 
         """
         if setuptype is None:
-            setuptype = SetupKeys.defaultSetups[self.solution_type]
+            setuptype = self.design_solutions.default_setup
         for setup in self.setups:
             if setupname == setup.name:
                 return setup
@@ -451,7 +473,7 @@ class FieldAnalysis3DLayout(Analysis):
         self.analysis_setup = setupname
         return setup
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def delete_setup(self, setupname):
         """Delete a setup.
 

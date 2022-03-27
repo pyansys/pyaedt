@@ -33,7 +33,6 @@ design and project variables in the 3D tools.
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
    CSVDataset
@@ -55,22 +54,10 @@ optimetrics setups.
                  close_on_exit=True, student_version=False)
 
     # returns the ParametericsSetups Class
-    app.opti_parametric
+    app.parametrics
 
     # returns the OptimizationSetups Class
-    app.opti_optimization
-
-    # returns the DOESetups Class
-    app.opti_doe
-
-    # returns the DXSetups Class
-    app.opti_designxplorer
-
-    # returns the SensitivitySetups Class
-    app.opti_sensitivity
-
-    # returns the StatisticalSetups Class
-    app.opti_statistical
+    app.optimizations
 
     # adds an optimization and returns Setup class with all settings and methods
     sweep3 = hfss.opti_optimization.add_optimization(calculation="dB(S(1,1))", calculation_value="2.5GHz")
@@ -81,15 +68,12 @@ optimetrics setups.
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
-   DXSetups
-   ParametericsSetups
-   SensitivitySetups
-   StatisticalSetups
-   DOESetups
+   ParametericSetups
    OptimizationSetups
+   SetupParam
+   SetupOpti
 
 
 
@@ -102,7 +86,6 @@ and designs.
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
    :nosignatures:
 
    DesignCache

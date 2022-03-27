@@ -1,15 +1,14 @@
 """
-Icepak Example
-----------------------
+Icepak: Graphic Card Thermal Analysis
+-------------------------------------
 This example shows how you can use PyAEDT to create an Graphic Card setup in Icepak and postprocess results.
 The example file is an Icepak Project with a model already created and with materials assigned.
 """
-# sphinx_gallery_thumbnail_path = 'Resources/Icepak.png'
 
 ###############################################################################
 # Launch AEDT in Graphical Mode
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# This examples launches AEDT 2021.2 in graphical mode.
+# This examples launches AEDT 2022R1 in graphical mode.
 
 import os
 import tempfile
@@ -33,9 +32,15 @@ if not os.path.exists(temp_folder):
     os.makedirs(temp_folder)
 shutil.copy2(project_full_name, project_temp_name)
 
-ipk = Icepak(project_temp_name, specified_version="2021.2", new_desktop_session=True)
+ipk = Icepak(project_temp_name, specified_version="2022.1", new_desktop_session=True)
 ipk.save_project(os.path.join(temp_folder, "Graphics_card.aedt"))
 ipk.autosave_disable()
+
+###############################################################################
+# Plot the model
+# ~~~~~~~~~~~~~~
+
+ipk.plot(show=False, export_path=os.path.join(temp_folder, "Graphics_card.jpg"), plot_air_objects=False)
 
 ###############################################################################
 # Create Source Blocks
@@ -50,7 +55,7 @@ ipk.create_source_block(["MEMORY1", "MEMORY1_1"], "5W")
 # ~~~~~~~~~~~~~~~~~
 # Assign Opening and Grille
 
-region = ipk.modeler.primitives["Region"]
+region = ipk.modeler["Region"]
 ipk.assign_openings(air_faces=region.bottom_face_x.id)
 ipk.assign_grille(air_faces=region.top_face_x.id, free_area_ratio=0.8)
 
@@ -79,7 +84,6 @@ setup1.props["Flow Regime"] = "Turbulent"
 setup1.props["Convergence Criteria - Max Iterations"] = 5
 setup1.props["Linear Solver Type - Pressure"] = "flex"
 setup1.props["Linear Solver Type - Temperature"] = "flex"
-setup1.update()
 ipk.save_project(r"C:\temp\Graphic_card.aedt")
 
 ###############################################################################
@@ -88,12 +92,13 @@ ipk.save_project(r"C:\temp\Graphic_card.aedt")
 # Solve Project and plot Temperatures
 
 quantity_name = "SurfTemperature"
-surflist = [i.id for i in ipk.modeler.primitives["CPU"].faces]
-surflist += [i.id for i in ipk.modeler.primitives["MEMORY1"].faces]
-surflist += [i.id for i in ipk.modeler.primitives["MEMORY1_1"].faces]
-surflist += [i.id for i in ipk.modeler.primitives["ALPHA_MAIN_PCB"].faces]
+surflist = [i.id for i in ipk.modeler["CPU"].faces]
+surflist += [i.id for i in ipk.modeler["MEMORY1"].faces]
+surflist += [i.id for i in ipk.modeler["MEMORY1_1"].faces]
+surflist += [i.id for i in ipk.modeler["ALPHA_MAIN_PCB"].faces]
 
 plot5 = ipk.post.create_fieldplot_surface(surflist, "SurfTemperature")
+
 
 ipk.analyze_nominal()
 ipk.release_desktop(True, True)

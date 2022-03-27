@@ -3,70 +3,46 @@ This module contains the `PostProcessor` class.
 
 It contains all advanced postprocessing functionalities that require Python 3.x packages like NumPy and Matplotlib.
 """
-from __future__ import absolute_import
+from __future__ import absolute_import  # noreorder
 
 import math
 import os
 import time
 import warnings
 
-from pyaedt.generic.general_methods import aedt_exception_handler
+from pyaedt.generic.general_methods import is_ironpython
+from pyaedt.generic.general_methods import pyaedt_function_handler
+from pyaedt.generic.plot import ModelPlotter
 from pyaedt.modules.PostProcessor import PostProcessor as Post
 
-try:
-    import numpy as np
-except ImportError:
-    warnings.warn(
-        "The NumPy module is required to run some functionalities of PostProcess.\n"
-        "Install with \n\npip install numpy\n\nRequires CPython."
-    )
-
-try:
-    import pyvista as pv
-
-    pyvista_available = True
-except ImportError:
-    warnings.warn(
-        "The PyVista module is required to run some functionalities of PostProcess.\n"
-        "Install with \n\npip install pyvista\n\nRequires CPython."
-    )
-
-try:
-    from IPython.display import Image
-
-    ipython_available = True
-except ImportError:
-    warnings.warn(
-        "The Ipython module is required to run some functionalities of PostProcess.\n"
-        "Install with \n\npip install ipython\n\nRequires CPython."
-    )
-
-try:
-    import matplotlib.pyplot as plt
-except ImportError:
-    warnings.warn(
-        "The Matplotlib module is required to run some functionalities of PostProcess.\n"
-        "Install with \n\npip install matplotlib\n\nRequires CPython."
-    )
-
-
-def is_float(istring):
-    """Convert a string to a float.
-
-    Parameters
-    ----------
-    istring : str
-        String to convert to a float.
-
-    Returns
-    -------
-    float
-        Converted float when successful, ``0`` when when failed.
-    """
+if not is_ironpython:
     try:
-        return float(istring.strip())
-    except Exception:
-        return 0
+        import numpy as np
+    except ImportError:
+        warnings.warn(
+            "The NumPy module is required to run some functionalities of PostProcess.\n"
+            "Install with \n\npip install numpy\n\nRequires CPython."
+        )
+
+    try:
+        from IPython.display import Image
+
+        ipython_available = True
+    except ImportError:
+        warnings.warn(
+            "The Ipython module is required to run some functionalities of PostProcess.\n"
+            "Install with \n\npip install ipython\n\nRequires CPython."
+        )
+
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        warnings.warn(
+            "The Matplotlib module is required to run some functionalities of PostProcess.\n"
+            "Install with \n\npip install matplotlib\n\nRequires CPython."
+        )
+    except:
+        pass
 
 
 class PostProcessor(Post):
@@ -89,7 +65,7 @@ class PostProcessor(Post):
     def __init__(self, app):
         Post.__init__(self, app)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def nb_display(self, show_axis=True, show_grid=True, show_ruler=True):
         """Show the Jupyter Notebook display.
 
@@ -114,7 +90,7 @@ class PostProcessor(Post):
         file_name = self.export_model_picture(show_axis=show_axis, show_grid=show_grid, show_ruler=show_ruler)
         return Image(file_name, width=500)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_efields_data(self, setup_sweep_name="", ff_setup="Infinite Sphere1", freq="All"):
         """Compute Etheta and EPhi.
 
@@ -193,7 +169,7 @@ class PostProcessor(Post):
             results_dict[source_name_without_mode] = [theta_range, phi_range, Etheta, Ephi]
         return results_dict
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def ff_sum_with_delta_phase(self, ff_data, xphase=0, yphase=0):
         """Generate a far field sum with a delta phase.
 
@@ -225,857 +201,81 @@ class PostProcessor(Post):
                 weight[m][n] = np.sqrt(mag) * np.exp(1 * ang)
         return True
 
-    @aedt_exception_handler
-    def _triangle_vertex(self, elements_nodes, num_nodes_per_element, take_all_nodes=True):
-        """
-
-        Parameters
-        ----------
-        elements_nodes :
-
-        num_nodes_per_element :
-
-        take_all_nodes : bool, optional
-            The default is ``True``.
-
-        Returns
-        -------
-
-        """
-        trg_vertex = []
-        if num_nodes_per_element == 10 and take_all_nodes:
-            for e in elements_nodes:
-                trg_vertex.append([e[0], e[1], e[3]])
-                trg_vertex.append([e[1], e[2], e[4]])
-                trg_vertex.append([e[1], e[4], e[3]])
-                trg_vertex.append([e[3], e[4], e[5]])
-
-                trg_vertex.append([e[9], e[6], e[8]])
-                trg_vertex.append([e[6], e[0], e[3]])
-                trg_vertex.append([e[6], e[3], e[8]])
-                trg_vertex.append([e[8], e[3], e[5]])
-
-                trg_vertex.append([e[9], e[7], e[8]])
-                trg_vertex.append([e[7], e[2], e[4]])
-                trg_vertex.append([e[7], e[4], e[8]])
-                trg_vertex.append([e[8], e[4], e[5]])
-
-                trg_vertex.append([e[9], e[7], e[6]])
-                trg_vertex.append([e[7], e[2], e[1]])
-                trg_vertex.append([e[7], e[1], e[6]])
-                trg_vertex.append([e[6], e[1], e[0]])
-        elif num_nodes_per_element == 10 and not take_all_nodes:
-            for e in elements_nodes:
-                trg_vertex.append([e[0], e[2], e[5]])
-                trg_vertex.append([e[9], e[0], e[5]])
-                trg_vertex.append([e[9], e[2], e[0]])
-                trg_vertex.append([e[9], e[2], e[5]])
-
-        elif num_nodes_per_element == 6 and not take_all_nodes:
-            for e in elements_nodes:
-                trg_vertex.append([e[0], e[2], e[5]])
-
-        elif num_nodes_per_element == 6 and take_all_nodes:
-            for e in elements_nodes:
-                trg_vertex.append([e[0], e[1], e[3]])
-                trg_vertex.append([e[1], e[2], e[4]])
-                trg_vertex.append([e[1], e[4], e[3]])
-                trg_vertex.append([e[3], e[4], e[5]])
-
-        elif num_nodes_per_element == 4 and take_all_nodes:
-            for e in elements_nodes:
-                trg_vertex.append([e[0], e[1], e[3]])
-                trg_vertex.append([e[1], e[2], e[3]])
-                trg_vertex.append([e[0], e[1], e[2]])
-                trg_vertex.append([e[0], e[2], e[3]])
-
-        elif num_nodes_per_element == 3:
-            trg_vertex = elements_nodes
-
-        return trg_vertex
-
-    @aedt_exception_handler
-    def _plot_from_aedtplt(
+    @pyaedt_function_handler()
+    def plot_model_obj(
         self,
-        aedtplt_files=None,
-        imageformat="jpg",
-        view="isometric",
-        plot_type="Full",
-        plot_label="Temperature",
-        model_color="#8faf8f",
-        show_model_edge=False,
-        off_screen=False,
-        scale_min=None,
-        scale_max=None,
+        objects=None,
+        show=True,
+        export_path=None,
+        plot_as_separate_objects=True,
+        plot_air_objects=False,
+        force_opacity_value=None,
+        clean_files=False,
     ):
-        """Export the 3D field solver mesh, fields, or both mesh and fields as images using Python Plotly.
-
-        .. note::
-           This method is currently supported only on Windows using CPython.
+        """Plot the model or a substet of objects.
 
         Parameters
         ----------
-        aedtplt_files : str or list, optional
-            Names of the one or more AEDTPLT files generated by AEDT. The default is ``None``.
-        imageformat : str, optional
-            Format of the image file. Options are ``"jpg"``, ``"png"``, ``"svg"``, and
-            ``"webp"``. The default is ``"jpg"``.
-        view : str, optional
-            View to export. Options are `Options are ``isometric``,
-            ``top``, ``front``, ``left``, ``all``.
-            The ``"all"`` option exports all views.
-        plot_type : str, optional
-            Type of the plot. The default is ``"Full"``.
-        plot_label : str, optional
-            Label for the plot. The default is ``"Temperature"``.
-        model_color : str, optional
-            Color scheme for the 3D model. The default is ``"#8faf8f"``, which is silver.
-        show_model_edge : bool, optional
-            Whether to return a list of the files that are generated. The default
-            is ``False``.
-        off_screen : bool, optional
-             The default is ``False``.
-        scale_min : float, optional
-            Fix the Scale Minimum value.
-        scale_max : float, optional
-            Fix the Scale Maximum value.
+        objects : list, optional
+            Optional list of objects to plot. If `None` all objects will be exported.
+        show : bool, optional
+            Show the plot after generation or simply return the
+            generated Class for more customization before plot.
+        export_path : str, optional
+            If available, an image is saved to file. If `None` no image will be saved.
+        plot_as_separate_objects : bool, optional
+            Plot each object separately. It may require more time to export from AEDT.
+        plot_air_objects : bool, optional
+            Plot also air and vacuum objects.
+        force_opacity_value : float, optional
+            Opacity value between 0 and 1 to be applied to all model.
+            If `None` aedt opacity will be applied to each object.
+        clean_files : bool, optional
+            Clean created files after plot. Cache is mainteined into the model object returned.
 
         Returns
         -------
-        list
-            List of exported files.
+        :class:`pyaedt.generic.plot.ModelPlotter`
+            Model Object.
         """
-        start = time.time()
-        if type(aedtplt_files) is str:
-            aedtplt_files = [aedtplt_files]
-
-        plot = pv.Plotter(off_screen=off_screen)
-        # if not off_screen:
-        #     plot.enable_anti_aliasing()
-        # plot.enable_fly_to_right_click()
-        lines = []
-        for file in aedtplt_files:
-            if ".aedtplt" in file:
-                with open(file, "r") as f:
-                    drawing_found = False
-                    for line in f:
-                        if "$begin Drawing" in line:
-                            drawing_found = True
-                            l_tmp = []
-                            continue
-                        if "$end Drawing" in line:
-                            lines.append(l_tmp)
-                            drawing_found = False
-                            continue
-                        if drawing_found:
-                            l_tmp.append(line)
-                            continue
-                        if "Number of drawing:" in line:
-                            n_drawings = int(line[18:])
-                            continue
-            elif ".obj" in file:
-                mesh = pv.read(file)
-
-                def create_object_mesh(opacity):
-                    """Create the mesh.
-
-                    Parameters
-                    ----------
-                    opacity :
-
-
-                    Returns
-                    -------
-
-                    """
-                    try:
-                        plot.remove_actor("Volumes")
-                    except:
-                        pass
-                    plot.add_mesh(
-                        mesh,
-                        show_scalar_bar=False,
-                        opacity=opacity,
-                        cmap=[model_color],
-                        name="3D Model",
-                        show_edges=show_model_edge,
-                        edge_color=model_color,
-                    )
-
-                plot.add_slider_widget(
-                    create_object_mesh,
-                    [0, 1],
-                    style="modern",
-                    value=0.75,
-                    pointa=[0.81, 0.98],
-                    pointb=[0.95, 0.98],
-                    title="Opacity",
-                )
-        filename = os.path.splitext(aedtplt_files[0])[0]
-        for drawing_lines in lines:
-            bounding = []
-            elements = []
-            nodes_list = []
-            solution = []
-            for l in drawing_lines:
-                if "BoundingBox(" in l:
-                    bounding = l[l.find("(") + 1 : -2].split(",")
-                    bounding = [i.strip() for i in bounding]
-                if "Elements(" in l:
-                    elements = l[l.find("(") + 1 : -2].split(",")
-                    elements = [int(i.strip()) for i in elements]
-                if "Nodes(" in l:
-                    nodes_list = l[l.find("(") + 1 : -2].split(",")
-                    nodes_list = [float(i.strip()) for i in nodes_list]
-                if "ElemSolution(" in l:
-                    # convert list of strings to list of floats
-                    sols = l[l.find("(") + 1 : -2].split(",")
-                    sols = [is_float(value) for value in sols]
-
-                    # sols = [float(i.strip()) for i in sols]
-                    num_solution_per_element = int(sols[2])
-                    sols = sols[3:]
-                    sols = [
-                        sols[i : i + num_solution_per_element] for i in range(0, len(sols), num_solution_per_element)
-                    ]
-                    solution = [sum(i) / num_solution_per_element for i in sols]
-
-            nodes = [[nodes_list[i], nodes_list[i + 1], nodes_list[i + 2]] for i in range(0, len(nodes_list), 3)]
-            num_nodes = elements[0]
-            num_elements = elements[1]
-            elements = elements[2:]
-            element_type = elements[0]
-            num_nodes_per_element = elements[4]
-            hl = 5  # header length
-            elements_nodes = []
-            for i in range(0, len(elements), num_nodes_per_element + hl):
-                elements_nodes.append([elements[i + hl + n] for n in range(num_nodes_per_element)])
-            if solution:
-                take_all_nodes = True  # solution case
-            else:
-                take_all_nodes = False  # mesh case
-            trg_vertex = self._triangle_vertex(elements_nodes, num_nodes_per_element, take_all_nodes)
-            # remove duplicates
-            nodup_list = [list(i) for i in list(set([frozenset(t) for t in trg_vertex]))]
-            sols_vertex = []
-            if solution:
-                sv = {}
-                for els, s in zip(elements_nodes, solution):
-                    for el in els:
-                        if el in sv:
-                            sv[el] = (sv[el] + s) / 2
-                        else:
-                            sv[el] = s
-                sols_vertex = [sv[v] for v in sorted(sv.keys())]
-            array = [[3] + [j - 1 for j in i] for i in nodup_list]
-            faces = np.hstack(array)
-            vertices = np.array(nodes)
-            surf = pv.PolyData(vertices, faces)
-            if sols_vertex:
-                temps = np.array(sols_vertex)
-                mean = np.mean(temps)
-                std = np.std(temps)
-                if np.min(temps) > 0:
-                    log = True
-                else:
-                    log = False
-                surf.point_data[plot_label] = temps
-
-            sargs = dict(
-                title_font_size=10,
-                label_font_size=10,
-                shadow=True,
-                n_labels=9,
-                italic=True,
-                fmt="%.1f",
-                font_family="arial",
-            )
-            if plot_type == "Clip":
-                plot.add_text("Full Plot", font_size=15)
-                if solution:
-
-                    class MyCustomRoutine:
-                        """ """
-
-                        def __init__(self, mesh):
-                            self.output = mesh  # Expected PyVista mesh type
-                            # default parameters
-                            self.kwargs = {
-                                "min_val": 0.5,
-                                "max_val": 30,
-                            }
-
-                        def __call__(self, param, value):
-                            self.kwargs[param] = value
-                            self.update()
-
-                        def update(self):
-                            """ """
-                            # This is where you call your simulation
-                            try:
-                                plot.remove_actor("FieldPlot")
-                            except:
-                                pass
-                            plot.add_mesh(
-                                surf,
-                                scalars=plot_label,
-                                log_scale=log,
-                                scalar_bar_args=sargs,
-                                cmap="rainbow",
-                                show_edges=False,
-                                clim=[self.kwargs["min_val"], self.kwargs["max_val"]],
-                                pickable=True,
-                                smooth_shading=True,
-                                name="FieldPlot",
-                            )
-                            return
-
-                    engine = MyCustomRoutine(surf)
-                    plot.add_box_widget(
-                        surf,
-                        show_edges=False,
-                        scalars=plot_label,
-                        log_scale=log,
-                        scalar_bar_args=sargs,
-                        cmap="rainbow",
-                        pickable=True,
-                        smooth_shading=True,
-                        name="FieldPlot",
-                    )
-                    if not off_screen:
-                        plot.add_slider_widget(
-                            callback=lambda value: engine("min_val", value),
-                            rng=[np.min(temps), np.max(temps)],
-                            title="Lower",
-                            style="modern",
-                            value=np.min(temps),
-                            pointa=(0.5, 0.98),
-                            pointb=(0.65, 0.98),
-                        )
-
-                        plot.add_slider_widget(
-                            callback=lambda value: engine("max_val", value),
-                            rng=[np.min(temps), np.max(temps)],
-                            title="Upper",
-                            style="modern",
-                            value=np.max(temps),
-                            pointa=(0.66, 0.98),
-                            pointb=(0.8, 0.98),
-                        )
-                    else:
-                        if isinstance(scale_max, float):
-                            engine("max_val", scale_max)
-                        if isinstance(scale_min, float):
-                            engine("min_val", scale_min)
-                else:
-                    plot.add_box_widget(
-                        surf, show_edges=True, line_width=0.1, color="grey", pickable=True, smooth_shading=True
-                    )
-            else:
-                plot.add_text("Full Plot", font_size=15)
-                if solution:
-                    class MyCustomRoutine:
-                        """ """
-
-                        def __init__(self, mesh):
-                            self.output = mesh  # Expected PyVista mesh type
-                            # default parameters
-                            self.kwargs = {
-                                "min_val": 0.5,
-                                "max_val": 30,
-                            }
-
-                        def __call__(self, param, value):
-                            self.kwargs[param] = value
-                            self.update()
-
-                        def update(self):
-                            """ """
-                            # This is where you call your simulation
-                            try:
-                                plot.remove_actor("FieldPlot")
-                            except:
-                                pass
-                            plot.add_mesh(
-                                surf,
-                                scalars=plot_label,
-                                log_scale=log,
-                                scalar_bar_args=sargs,
-                                cmap="rainbow",
-                                show_edges=False,
-                                clim=[self.kwargs["min_val"], self.kwargs["max_val"]],
-                                pickable=True,
-                                smooth_shading=True,
-                                name="FieldPlot",
-                            )
-                            return
-
-                    engine = MyCustomRoutine(surf)
-                    plot.add_mesh(
-                        surf,
-                        show_edges=False,
-                        scalars=plot_label,
-                        log_scale=log,
-                        scalar_bar_args=sargs,
-                        cmap="rainbow",
-                        pickable=True,
-                        smooth_shading=True,
-                        name="FieldPlot",
-                    )
-                    if not off_screen:
-                        plot.add_slider_widget(
-                            callback=lambda value: engine("min_val", value),
-                            rng=[np.min(temps), np.max(temps)],
-                            title="Lower",
-                            style="modern",
-                            value=np.min(temps),
-                            pointa=(0.5, 0.98),
-                            pointb=(0.65, 0.98),
-                        )
-
-                        plot.add_slider_widget(
-                            callback=lambda value: engine("max_val", value),
-                            rng=[np.min(temps), np.max(temps)],
-                            title="Upper",
-                            style="modern",
-                            value=np.max(temps),
-                            pointa=(0.66, 0.98),
-                            pointb=(0.8, 0.98),
-                        )
-                    else:
-                        if isinstance(scale_max, (int, float)):
-                            engine("max_val", scale_max)
-                        if isinstance(scale_min, (int, float)):
-                            engine("min_val", scale_min)
-                else:
-                    plot.add_mesh(
-                        surf, show_edges=True, line_width=0.1, color="grey", pickable=True, smooth_shading=True
-                    )
-            plot.show_axes()
-            # plot.show_grid()
-            if view == "isometric":
-                plot.view_isometric()
-            elif view == "top":
-                plot.view_yz()
-            elif view == "front":
-                plot.view_xz()
-            elif view == "top":
-                plot.view_xy()
-        files_list = []
-
-        if plot:
-            end = time.time() - start
-            self.logger.info("PyVista plot generation took {} seconds.".format(end))
-            if off_screen:
-                if imageformat:
-                    plot.show(screenshot=filename + "." + imageformat)
-                    files_list.append(filename + "." + imageformat)
-                else:
-                    plot.show()
-            else:
-
-                def show(screen=None, interactive=True):
-                    """
-
-                    Parameters
-                    ----------
-                    screen : optional
-                        The default is ``None``.
-                    interactive : bool, optional
-                        The default is ``True``.
-
-                    Returns
-                    -------
-
-                    """
-                    if screen:
-                        plot.show(screenshot=screen, interactive=interactive, full_screen=True)
-                    else:
-                        plot.show(interactive=interactive)
-
-                if imageformat:
-                    show(filename + "." + imageformat, True)
-                    files_list.append(filename + "." + imageformat)
-                else:
-                    show(filename + "." + imageformat, False)
-            for f in aedtplt_files:
-                os.remove(os.path.join(f))
-
-        return files_list
-
-    @aedt_exception_handler
-    def _animation_from_aedtflt(
-        self,
-        aedtplt_files=None,
-        variation_var="Time",
-        variation_list=[],
-        plot_label="Temperature",
-        model_color="#8faf8f",
-        export_gif=False,
-        off_screen=False,
-    ):
-        """Export the 3D field solver mesh, fields, or both mesh and fields as images using Python Plotly.
-
-          .. note::
-           This method is currently supported only on Windows using CPython.
-
-        Parameters
-        ----------
-        aedtplt_files : str or list, optional
-            Names of the one or more AEDTPLT files generated by AEDT. The default is ``None``.
-        variation_var : str, optional
-             Variable to vary. The default is ``"Time"``.
-        variation_list : list, optional
-             List of variation values. The default is ``[]``.
-        plot_label : str, optional
-            Label for the plot. The default is ``"Temperature"``.
-        model_color : str, optional
-            Color scheme for the 3D model. The default is ``"#8faf8f"``, which is silver.
-        export_gif : bool, optional
-             Whether to export the animation as a GIF file. The default is ``False``.
-        off_screen : bool, optional
-             The default is ``False``.
-
-        Returns
-        -------
-        str
-            Name of the GIF file.
-        """
-        frame_per_seconds = 0.5
-        start = time.time()
-        if type(aedtplt_files) is str:
-            aedtplt_files = [aedtplt_files]
-        plot = pv.Plotter(notebook=False, off_screen=off_screen)
-        if not off_screen:
-            plot.enable_anti_aliasing()
-        plot.enable_fly_to_right_click()
-        lines = []
-        for file in aedtplt_files:
-            if ".aedtplt" in file:
-                with open(file, "r") as f:
-                    drawing_found = False
-                    for line in f:
-                        if "$begin Drawing" in line:
-                            drawing_found = True
-                            l_tmp = []
-                            continue
-                        if "$end Drawing" in line:
-                            lines.append(l_tmp)
-                            drawing_found = False
-                            continue
-                        if drawing_found:
-                            l_tmp.append(line)
-                            continue
-                        if "Number of drawing:" in line:
-                            n_drawings = int(line[18:])
-                            continue
-            elif ".obj" in file:
-                mesh = pv.read(file)
-                plot.add_mesh(
-                    mesh,
-                    show_scalar_bar=False,
-                    opacity=0.75,
-                    cmap=[model_color],
-                    name="3D Model",
-                    show_edges=False,
-                    edge_color=model_color,
-                )
-                # def create_object_mesh(opacity):
-                #     try:
-                #         p.remove_actor("Volumes")
-                #     except:
-                #         pass
-                #     p.add_mesh(mesh, show_scalar_bar=False, opacity=opacity, cmap=[model_color], name="3D Model",
-                #                show_edges=False, edge_color=model_color)
-                # p.add_slider_widget(
-                #   create_object_mesh,
-                #   [0,1], style='modern',
-                #   value=0.75,pointa=[0.81,0.98],
-                #   pointb=[0.95,0.98],title="Opacity"
-                # )
-        filename = os.path.splitext(aedtplt_files[0])[0]
-        print(filename)
-        surfs = []
-        log = False
-        mins = 1e12
-        maxs = -1e12
-        log = True
-        for drawing_lines in lines:
-            bounding = []
-            elements = []
-            nodes_list = []
-            solution = []
-            for l in drawing_lines:
-                if "BoundingBox(" in l:
-                    bounding = l[l.find("(") + 1 : -2].split(",")
-                    bounding = [i.strip() for i in bounding]
-                if "Elements(" in l:
-                    elements = l[l.find("(") + 1 : -2].split(",")
-                    elements = [int(i.strip()) for i in elements]
-                if "Nodes(" in l:
-                    nodes_list = l[l.find("(") + 1 : -2].split(",")
-                    nodes_list = [float(i.strip()) for i in nodes_list]
-                if "ElemSolution(" in l:
-                    # convert list of strings to list of floats
-                    sols = l[l.find("(") + 1 : -2].split(",")
-                    sols = [is_float(value) for value in sols]
-
-                    num_solution_per_element = int(sols[2])
-                    sols = sols[3:]
-                    sols = [
-                        sols[i : i + num_solution_per_element] for i in range(0, len(sols), num_solution_per_element)
-                    ]
-                    solution = [sum(i) / num_solution_per_element for i in sols]
-
-            nodes = [[nodes_list[i], nodes_list[i + 1], nodes_list[i + 2]] for i in range(0, len(nodes_list), 3)]
-            num_nodes = elements[0]
-            num_elements = elements[1]
-            elements = elements[2:]
-            element_type = elements[0]
-            num_nodes_per_element = elements[4]
-            hl = 5  # header length
-            elements_nodes = []
-            for i in range(0, len(elements), num_nodes_per_element + hl):
-                elements_nodes.append([elements[i + hl + n] for n in range(num_nodes_per_element)])
-            if solution:
-                take_all_nodes = True  # solution case
-            else:
-                take_all_nodes = False  # mesh case
-            trg_vertex = self._triangle_vertex(elements_nodes, num_nodes_per_element, take_all_nodes)
-            # remove duplicates
-            nodup_list = [list(i) for i in list(set([frozenset(t) for t in trg_vertex]))]
-            sols_vertex = []
-            if solution:
-                sv = {}
-                for els, s in zip(elements_nodes, solution):
-                    for el in els:
-                        if el in sv:
-                            sv[el] = (sv[el] + s) / 2
-                        else:
-                            sv[el] = s
-                sols_vertex = [sv[v] for v in sorted(sv.keys())]
-            array = [[3] + [j - 1 for j in i] for i in nodup_list]
-            faces = np.hstack(array)
-            vertices = np.array(nodes)
-            surf = pv.PolyData(vertices, faces)
-
-            if sols_vertex:
-                temps = np.array(sols_vertex)
-                mean = np.mean(temps)
-                std = np.std(temps)
-                if np.min(temps) <= 0:
-                    log = False
-                surf.point_data[plot_label] = temps
-            if solution:
-                surfs.append(surf)
-                if np.min(temps) < mins:
-                    mins = np.min(temps)
-                if np.max(temps) > maxs:
-                    maxs = np.max(temps)
-
-        self._animating = True
-        gifname = None
-        if export_gif:
-            gifname = os.path.splitext(aedtplt_files[0])[0] + ".gif"
-            plot.open_gif(gifname)
-
-        def q_callback():
-            """exit when user wants to leave"""
-            self._animating = False
-
-        self._pause = False
-
-        def p_callback():
-            """exit when user wants to leave"""
-            self._pause = not self._pause
-
-        plot.add_text("Press p for Play/Pause, Press q to exit ", font_size=8, position="upper_left")
-        plot.add_text(" ", font_size=10, position=[0, 0])
-        plot.add_key_event("q", q_callback)
-        plot.add_key_event("p", p_callback)
-
-        # run until q is pressed
-        plot.show_axes()
-        plot.show_grid()
-        cpos = plot.show(interactive=False, auto_close=False, interactive_update=not off_screen)
-
-        sargs = dict(
-            title_font_size=10,
-            label_font_size=10,
-            shadow=True,
-            n_labels=9,
-            italic=True,
-            fmt="%.1f",
-            font_family="arial",
+        assert self._app._aedt_version >= "2021.2", self.logger.error("Object is supported from AEDT 2021 R2.")
+        files = self.export_model_obj(
+            obj_list=objects,
+            export_as_single_objects=plot_as_separate_objects,
+            air_objects=plot_air_objects,
         )
-        plot.add_mesh(
-            surfs[0],
-            scalars=plot_label,
-            log_scale=log,
-            scalar_bar_args=sargs,
-            cmap="rainbow",
-            clim=[mins, maxs],
-            show_edges=False,
-            pickable=True,
-            smooth_shading=True,
-            name="FieldPlot",
-        )
-        plot.isometric_view()
-        start = time.time()
+        if not files:
+            self.logger.warning("No Objects exported. Try other options or include Air objects.")
+            return False
 
-        plot.update(1, force_redraw=True)
-        first_loop = True
-        if export_gif:
-            first_loop = True
-            plot.write_frame()
-        else:
-            first_loop = False
-        i = 1
-        while self._animating:
-            if self._pause:
-                time.sleep(1)
-                plot.update(1, force_redraw=True)
-                continue
-            # p.remove_actor("FieldPlot")
-            if i >= len(surfs):
-                if off_screen:
-                    break
-                i = 0
-                first_loop = False
-            scalars = surfs[i].point_data[plot_label]
-            plot.update_scalars(scalars, render=False)
-            # p.add_mesh(surfs[i], scalars=plot_label, log_scale=log, scalar_bar_args=sargs, cmap='rainbow',
-            #            show_edges=False, pickable=True, smooth_shading=True, name="FieldPlot")
-            plot.textActor.SetInput(variation_var + " = " + variation_list[i])
-            if not hasattr(plot, "ren_win"):
-                break
-            # p.update(1, force_redraw=True)
-            time.sleep(max(0, frame_per_seconds - (time.time() - start)))
-            start = time.time()
-            if off_screen:
-                plot.render()
+        model = ModelPlotter()
+
+        for file in files:
+            if force_opacity_value:
+                model.add_object(file[0], file[1], force_opacity_value, self.modeler.model_units)
             else:
-                plot.update(1, force_redraw=True)
-            if first_loop:
-                plot.write_frame()
+                model.add_object(file[0], file[1], file[2], self.modeler.model_units)
+        if not show:
+            model.off_screen = True
+        if export_path:
+            model.plot(export_path)
+        elif show:
+            model.plot()
+        if clean_files:
+            model.clean_cache_and_files(clean_cache=False)
+        return model
 
-            time.sleep(0.2)
-            i += 1
-        plot.close()
-        for el in aedtplt_files:
-            os.remove(el)
-        return gifname
-
-    @aedt_exception_handler
-    def export_model_obj(self):
-        """Export the model."""
-        assert self._app._aedt_version >= "2021.2", self.logger.error(
-            "Object is supported from AEDT 2021 R2."
-        )
-        project_path = self._app.project_path
-        obj_list = self._app.modeler.primitives.object_names
-        obj_list = [
-            i
-            for i in obj_list
-            if not self._app.modeler.primitives.objects[self._app.modeler.primitives.get_obj_id(i)].is3d
-            or (
-                self._app.modeler.primitives.objects[
-                    self._app.modeler.primitives.get_obj_id(i)
-                ].material_name.lower()
-                != "vacuum"
-                and self._app.modeler.primitives.objects[
-                    self._app.modeler.primitives.get_obj_id(i)
-                ].material_name.lower()
-                != "air"
-            )
-        ]
-        self._app.modeler.oeditor.ExportModelMeshToFile(os.path.join(project_path, "Model.obj"), obj_list)
-        return os.path.join(project_path, "Model.obj")
-
-    @aedt_exception_handler
-    def export_mesh_obj(self, setup_name=None, intrinsic_dict={}):
-        """Export the mesh.
-
-        Parameters
-        ----------
-        setup_name : str, optional
-            Name of the setup. The default is ``None``.
-        intrinsic_dict : dict, optipnal.
-            Intrinsic dictionary that is needed for the export.
-            The default is ``{}``.
-
-        Returns
-        -------
-
-        """
-        project_path = self._app.project_path
-
-        if not setup_name:
-            setup_name = self._app.nominal_adaptive
-        face_lists = []
-        obj_list = self._app.modeler.primitives.object_names
-        for el in obj_list:
-            obj_id = self._app.modeler.primitives.get_obj_id(el)
-            if not self._app.modeler.primitives.objects[obj_id].is3d or (
-                    self._app.modeler.primitives.objects[obj_id].material_name != "vacuum"
-                    and self._app.modeler.primitives.objects[obj_id].material_name != "air"
-            ):
-                face_lists += self._app.modeler.primitives.get_object_faces(obj_id)
-        plot = self.create_fieldplot_surface(face_lists, "Mesh", setup_name, intrinsic_dict)
-        if plot:
-            file_to_add = self.export_field_plot(plot.name, project_path)
-            plot.delete()
-            return file_to_add
-        return None
-
-    @aedt_exception_handler
-    def plot_model_obj(self, export_afterplot=True, jupyter=False):
-        """Plot the model.
-
-        Parameters
-        ----------
-        export_afterplot : bool, optional
-             Whether to export the plot after it is generated. The
-             default is ``True``.
-        jupyter : bool, optional
-             Whether to generate the plot using Jupyter Notebook.  The default is ``False``.
-
-        Returns
-        -------
-        list
-            List of plot files.
-        """
-        assert self._app._aedt_version >= "2021.2", self.logger.error(
-            "Object is supported from AEDT 2021 R2."
-        )
-        files = [self.export_model_obj()]
-        if export_afterplot:
-            imageformat = "jpg"
-        else:
-            imageformat = None
-        file_list = self._plot_from_aedtplt(
-            files,
-            imageformat=imageformat,
-            plot_label="3D Model",
-            model_color="#8faf8f",
-            show_model_edge=False,
-            jupyter=jupyter,
-        )
-        return file_list
-
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def plot_field_from_fieldplot(
         self,
         plotname,
         project_path="",
         meshplot=False,
-        setup_name=None,
-        intrinsic_dict={},
         imageformat="jpg",
         view="isometric",
         plot_label="Temperature",
         plot_folder=None,
-        off_screen=False,
+        show=True,
         scale_min=None,
         scale_max=None,
     ):
@@ -1093,11 +293,6 @@ class PostProcessor(Post):
         meshplot : bool, optional
             Whether to create and plot the mesh over the fields. The
             default is ``False``.
-        setup_name : str, optional
-            Name of the setup or sweep to use for the export. The default is ``None``.
-        intrinsic_dict : dict, optional
-            Intrinsic dictionary that is needed for the export when ``meshplot="True"``.
-            The default is ``{}``.
         imageformat : str, optional
             Format of the image file. Options are ``"jpg"``,
             ``"png"``, ``"svg"``, and ``"webp"``. The default is
@@ -1111,7 +306,7 @@ class PostProcessor(Post):
             Plot folder to update before exporting the field.
             The default is ``None``, in which case all plot
             folders are updated.
-        off_screen : bool, optional
+        show : bool, optional
             Export Image without plotting on UI.
         scale_min : float, optional
             Fix the Scale Minimum value.
@@ -1120,8 +315,8 @@ class PostProcessor(Post):
 
         Returns
         -------
-        type
-            List of exported files.
+        :class:`pyaedt.generic.plot.ModelPlotter`
+            Model Object.
         """
         if not plot_folder:
             self.ofieldsreporter.UpdateAllFieldsPlots()
@@ -1129,42 +324,46 @@ class PostProcessor(Post):
             self.ofieldsreporter.UpdateQuantityFieldsPlots(plot_folder)
 
         start = time.time()
-        files_to_add = []
-        if not project_path:
-            project_path = self._app.project_path
-        file_to_add = self.export_field_plot(plotname, project_path)
-        file_list = None
+        file_to_add = self.export_field_plot(plotname, self._app.working_directory)
+        models = None
         if not file_to_add:
             return False
         else:
-            files_to_add.append(file_to_add)
-            if meshplot:
-                if self._app._aedt_version >= "2021.2":
-                    files_to_add.append(self.export_model_obj())
-                else:
-                    file_to_add = self.export_mesh_obj(setup_name, intrinsic_dict)
-                    if file_to_add:
-                        files_to_add.append(file_to_add)
-            file_list = self._plot_from_aedtplt(
-                files_to_add, imageformat=imageformat, view=view, plot_label=plot_label, off_screen=off_screen,
-                scale_min=scale_min, scale_max=scale_max)
-            endt = time.time() - start
-            print("Field Generation, export and plot time: ", endt)
-        return file_list
+            if self._app._aedt_version >= "2021.2":
+                models = self.export_model_obj(export_as_single_objects=True, air_objects=False)
 
-    @aedt_exception_handler
+        model = ModelPlotter()
+        model.off_screen = not show
+
+        if file_to_add:
+            model.add_field_from_file(file_to_add, coordinate_units=self.modeler.model_units, show_edges=meshplot)
+            if plot_label:
+                model.fields[0].label = plot_label
+        if models:
+            for m in models:
+                model.add_object(m[0], m[1], m[2])
+        model.view = view
+
+        if scale_min and scale_max:
+            model.range_min = scale_min
+            model.range_max = scale_max
+        if show or project_path:
+            model.plot(os.path.join(project_path, self._app.project_name + "." + imageformat))
+            model.clean_cache_and_files(clean_cache=False)
+
+        return model
+
+    @pyaedt_function_handler()
     def animate_fields_from_aedtplt(
         self,
         plotname,
         plot_folder=None,
         meshplot=False,
-        setup_name=None,
-        intrinsic_dict={},
         variation_variable="Phi",
         variation_list=["0deg"],
         project_path="",
         export_gif=False,
-        off_screen=False,
+        show=True,
     ):
         """Generate a field plot to an image file (JPG or PNG) using PyVista.
 
@@ -1178,43 +377,37 @@ class PostProcessor(Post):
         plot_folder : str, optional
             Name of the folder in which the plot resides. The default
             is ``None``.
-        setup_name : str, optional
-            Name of the setup (sweep) to use for the export. The
-            default is ``None``.
-        intrinsic_dict : dict, optional
-            Intrinsic dictionary that is needed for the export. The default
-            is ``{}``.
         variation_variable : str, optional
             Variable to vary. The default is ``"Phi"``.
         variation_list : list, optional
             List of variation values with units. The default is
             ``["0deg"]``.
         project_path : str, optional
-            Path for the export. The default is ``""``.
+            Path for the export. The default is ``""`` which export file in working_directory.
         meshplot : bool, optional
-             The default is ``False``.
+             The default is ``False``. Valid from Version 2021.2.
         export_gif : bool, optional
              The default is ``False``.
-        off_screen : bool, optional
-             Generate the animation without showing an interactive plot.  The default is ``False``.
+                show=False,
+        show : bool, optional
+             Generate the animation without showing an interactive plot.  The default is ``True``.
 
         Returns
         -------
-        bool
-            ``True`` when successful, ``False`` when failed.
+        :class:`pyaedt.generic.plot.ModelPlotter`
+            Model Object.
         """
         if not plot_folder:
             self.ofieldsreporter.UpdateAllFieldsPlots()
         else:
             self.ofieldsreporter.UpdateQuantityFieldsPlots(plot_folder)
-        files_to_add = []
+        models_to_add = []
         if meshplot:
             if self._app._aedt_version >= "2021.2":
-                files_to_add.append(self.export_model_obj())
-            else:
-                file_to_add = self.export_mesh_obj(setup_name, intrinsic_dict)
-                if file_to_add:
-                    files_to_add.append(file_to_add)
+                models_to_add = self.export_model_obj(export_as_single_objects=True, air_objects=False)
+        fields_to_add = []
+        if not project_path:
+            project_path = self._app.working_directory
         for el in variation_list:
             self._app._odesign.ChangeProperty(
                 [
@@ -1226,14 +419,26 @@ class PostProcessor(Post):
                     ],
                 ]
             )
-            files_to_add.append(self.export_field_plot(plotname, project_path, plotname + variation_variable + str(el)))
+            fields_to_add.append(
+                self.export_field_plot(plotname, project_path, plotname + variation_variable + str(el))
+            )
 
-        self._animation_from_aedtflt(
-            files_to_add, variation_variable, variation_list, export_gif=export_gif, off_screen=off_screen
-        )
-        return True
+        model = ModelPlotter()
+        model.off_screen = not show
+        if models_to_add:
+            for m in models_to_add:
+                model.add_object(m[0], cad_color=m[1], opacity=m[2])
+        if fields_to_add:
+            model.add_frames_from_file(fields_to_add)
+        if export_gif:
+            model.gif_file = os.path.join(self._app.working_directory, self._app.project_name + ".gif")
 
-    @aedt_exception_handler
+        if show or export_gif:
+            model.animate()
+            model.clean_cache_and_files(clean_cache=False)
+        return model
+
+    @pyaedt_function_handler()
     def animate_fields_from_aedtplt_2(
         self,
         quantityname,
@@ -1246,9 +451,10 @@ class PostProcessor(Post):
         variation_list=["0deg"],
         project_path="",
         export_gif=False,
-        off_screen=False,
+        show=True,
+        zoom=None,
     ):
-        """Generate a field plot to an image file (JPG or PNG) using PyVista.
+        """Generate a field plot to an animated gif file using PyVista.
 
          .. note::
             The PyVista module rebuilds the mesh and the overlap fields on the mesh.
@@ -1280,29 +486,28 @@ class PostProcessor(Post):
             List of variation values with units. The default is
             ``["0deg"]``.
         project_path : str, optional
-            Path for the export. The default is ``""``.
+            Path for the export. The default is ``""`` which export file in working_directory.
         export_gif : bool, optional
-             Whether to export to a GIF file. The default is ``False``,
-             in which case the plot is exported to a JPG file.
-        off_screen : bool, optional
-             The default is ``False``.
+            Whether to export to a GIF file. The default is ``False``,
+            in which case the plot is exported to a JPG file.
+        show : bool, optional
+            Generate the animation without showing an interactive plot.  The default is ``True``.
+        zoom : float, optional
+            Zoom factor.
 
         Returns
         -------
-        bool
-            ``True`` when successful, ``False`` when failed.
+        :class:`pyaedt.generic.plot.ModelPlotter`
+            Model Object.
         """
         if not project_path:
-            project_path = self._app.project_path
-        files_to_add = []
+            project_path = self._app.working_directory
+        models_to_add = []
         if meshplot:
             if self._app._aedt_version >= "2021.2":
-                files_to_add.append(self.export_model_obj())
-            else:
-                file_to_add = self.export_mesh_obj(setup_name, intrinsic_dict)
-                if file_to_add:
-                    files_to_add.append(file_to_add)
+                models_to_add = self.export_model_obj(export_as_single_objects=True, air_objects=False)
         v = 0
+        fields_to_add = []
         for el in variation_list:
             intrinsic_dict[variation_variable] = el
             if plottype == "Surface":
@@ -1314,15 +519,27 @@ class PostProcessor(Post):
             if plotf:
                 file_to_add = self.export_field_plot(plotf.name, project_path, plotf.name + str(v))
                 if file_to_add:
-                    files_to_add.append(file_to_add)
+                    fields_to_add.append(file_to_add)
                 plotf.delete()
             v += 1
+        model = ModelPlotter()
+        model.off_screen = not show
+        if models_to_add:
+            for m in models_to_add:
+                model.add_object(m[0], cad_color=m[1], opacity=m[2])
+        if fields_to_add:
+            model.add_frames_from_file(fields_to_add)
+        if export_gif:
+            model.gif_file = os.path.join(self._app.working_directory, self._app.project_name + ".gif")
+        if zoom:
+            model.zoom = zoom
+        if show or export_gif:
+            model.animate()
+            model.clean_cache_and_files(clean_cache=False)
 
-        return self._animation_from_aedtflt(
-            files_to_add, variation_variable, variation_list, export_gif=export_gif, off_screen=off_screen
-        )
+        return model
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def far_field_plot(self, ff_data, x=0, y=0, qty="rETotal", dB=True, array_size=[4, 4]):
         """Generate a far field plot.
 
@@ -1429,7 +646,7 @@ class PostProcessor(Post):
 
         np.max(qty_to_plot)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_3d_plot(
         self, solution_data, nominal_sweep="Freq", nominal_value=1, primary_sweep="Theta", secondary_sweep="Phi"
     ):

@@ -1,0 +1,19 @@
+comment:
+  layout: "diff"
+  behavior: default
+
+coverage:
+  status:
+    project: false
+    patch:
+      default:
+        # basic
+        target: 85%
+        if_not_found: success
+        if_ci_failed: error
+        if_no_uploads: error
+  ignore:
+    - "examples"  # ignore folders and all its contents
+    - "_unittest_ironpython"  # ignore folders and all its contents
+    - "pyaedt/third_party/**/*.py"  # ignore folders and all its contents
+

@@ -1,4 +1,5 @@
 import math
+import warnings
 
 RAD2DEG = 180.0 / math.pi
 DEG2RAD = math.pi / 180
@@ -12,6 +13,7 @@ METER2IN = 0.0254
 METER2MILES = 1609.344051499
 
 MILS2METER = 39370.078740157
+
 
 def db20(x, inverse=True):
     """Convert db20 to decimal and viceversa."""
@@ -124,6 +126,60 @@ def _resolve_unit_system(unit_system_1, unit_system_2, operation):
         return ""
 
 
+def unit_converter(value, unit_system="Length", input_units="meter", output_units="mm"):
+    """Convert Unit in specified Unit System.
+
+    Parameters
+    ----------
+    value : float
+        Value to convert.
+    unit_system : str
+        Unit system. Default is `"Length"`.
+    input_units : str
+        Input units. Default is `"meter"`.
+    output_units : str
+        Output units. Default is `"mm"`.
+
+    Returns
+    -------
+    float
+        Converted value.
+    """
+    if unit_system in AEDT_UNITS:
+        if input_units not in AEDT_UNITS[unit_system] or output_units not in AEDT_UNITS[unit_system]:
+            warnings.warn("No units found")
+            return value
+        else:
+            return value * AEDT_UNITS[unit_system][input_units] / AEDT_UNITS[unit_system][output_units]
+    warnings.warn("No system unit found")
+    return value
+
+
+def scale_units(scale_to_unit):
+    """Find the scale_to_unit into main system unit.
+
+    Parameters
+    ----------
+    scale_to_unit : str
+        Unit to Scale.
+
+    Returns
+    -------
+    float
+        Return the scaling factor if any.
+    """
+    sunit = 1.0
+    for val in list(AEDT_UNITS.values()):
+        for unit, scale_val in val.items():
+            if scale_to_unit.lower() == unit.lower():
+                sunit = scale_val
+                break
+        else:
+            continue
+        break
+    return sunit
+
+
 AEDT_UNITS = {
     "AngularSpeed": {
         "deg_per_hr": HOUR2SEC * DEG2RAD,
@@ -175,6 +231,7 @@ AEDT_UNITS = {
         "cm": 1e-2,
         "dm": 1e-1,
         "meter": 1.0,
+        "meters": 1.0,
         "km": 1e3,
         "uin": METER2IN * 1e-6,
         "mil": METER2IN * 1e-3,
@@ -326,6 +383,12 @@ UNIT_SYSTEM_OPERATIONS = {
 }
 
 
+class INFINITE_SPHERE_TYPE(object):
+    """INFINITE_SPHERE_TYPE Enumerator class."""
+
+    (ThetaPhi, AzOverEl, ElOverAz) = ("Theta-Phi", "Az Over El", "El Over Az")
+
+
 class FILLET(object):
     """FilletType Enumerator class."""
 
@@ -362,6 +425,57 @@ class GLOBALCS(object):
     (XY, YZ, ZX) = ("Global:XY", "Global:YZ", "Global:XZ")
 
 
+class MATRIXOPERATIONSQ3D(object):
+    """Matrix Reduction types."""
+
+    (JoinSeries, JoinParallel, FloatNet, GroundNet, FloatTerminal, FloatInfinity, ReturnPath, AddSink, MoveSink) = (
+        "JoinSeries",
+        "JoinParallel",
+        "FloatNet",
+        "GroundNet",
+        "FloatTerminal",
+        "FloatInfinity",
+        "ReturnPath",
+        "AddSink",
+        "MoveSink",
+    )
+
+
+class MATRIXOPERATIONSQ2D(object):
+    """Matrix Reduction types."""
+
+    (AddGround, SetReferenceGround, Float, Parallel, DiffPair) = (
+        "AddGround",
+        "SetReferenceGround",
+        "Float",
+        "Parallel",
+        "DiffPair",
+    )
+
+
+class CATEGORIESQ3D(object):
+    """Plot Categories for Q2d and Q3d."""
+
+    class Q2D(object):
+        (
+            CMatrix,
+            GMatrix,
+            RMatrix,
+            LMatrix,
+            LumpedC,
+            LumpedG,
+            LumpedR,
+            LumpedL,
+            CharacteristicImpedance,
+            CrossTalkForward,
+            LumpedCrossTalkForward,
+            CrossTalkBackward,
+        ) = ("C", "G", "R", "L", "lumpC", "lumpG", "lumpR", "lumpL", "Z0", "Kf", "lumpKf", "Kb")
+
+    class Q3D(object):
+        (C, G, DCL, DCR, ACL, ACR) = ("C", "G", "DCL", "DCR", "ACL", "ACR")
+
+
 class CSMODE(object):
     """COORDINATE SYSTEM MODE Enumerator class."""
 
@@ -392,6 +506,12 @@ class FlipChipOrientation(object):
     (Up, Down) = range(0, 2)
 
 
+class SourceType(object):
+    """Type of excitation enumerator."""
+
+    (CoaxPort, CircPort, LumpedPort, Vsource, Isource, Resistor, Inductor, Capacitor) = range(0, 8)
+
+
 class SOLUTIONS(object):
     """Provides the names of default solution types."""
 
@@ -399,8 +519,8 @@ class SOLUTIONS(object):
         """Provides HFSS solution types."""
 
         (DrivenModal, DrivenTerminal, EigenMode, Transient, SBR) = (
-            "DrivenModal",
-            "DrivenTerminal",
+            "Modal",
+            "Terminal",
             "EigenMode",
             "Transient Network",
             "SBR+",
@@ -591,3 +711,111 @@ class GravityDirection(object):
         Use :func:`GRAVITY` instead."""
 
     (XNeg, YNeg, ZNeg, XPos, YPos, ZPos) = range(0, 6)
+
+
+CSS4_COLORS = {
+    "chocolate": "#D2691E",
+    "darkgreen": "#006400",
+    "orangered": "#FF4500",
+    "darkseagreen": "#8FBC8F",
+    "darkmagenta": "#8B008B",
+    "saddlebrown": "#8B4513",
+    "mediumaquamarine": "#66CDAA",
+    "limegreen": "#32CD32",
+    "blue": "#0000FF",
+    "mediumseagreen": "#3CB371",
+    "peru": "#CD853F",
+    "turquoise": "#40E0D0",
+    "darkcyan": "#008B8B",
+    "olivedrab": "#6B8E23",
+    "cyan": "#00FFFF",
+    "aquamarine": "#7FFFD4",
+    "powderblue": "#B0E0E6",
+    "hotpink": "#FF69B4",
+    "palegreen": "#98FB98",
+    "darkturquoise": "#00CED1",
+    "magenta": "#FF00FF",
+    "slateblue": "#6A5ACD",
+    "lightgreen": "#90EE90",
+    "sienna": "#A0522D",
+    "darkorchid": "#9932CC",
+    "orange": "#FFA500",
+    "forestgreen": "#228B22",
+    "palegoldenrod": "#EEE8AA",
+    "blueviolet": "#8A2BE2",
+    "royalblue": "#4169E1",
+    "teal": "#008080",
+    "darkgoldenrod": "#B8860B",
+    "lightskyblue": "#87CEFA",
+    "lime": "#00FF00",
+    "orchid": "#DA70D6",
+    "mediumorchid": "#BA55D3",
+    "indigo": "#4B0082",
+    "mediumspringgreen": "#00FA9A",
+    "tomato": "#FF6347",
+    "mediumblue": "#0000CD",
+    "midnightblue": "#191970",
+    "deepskyblue": "#00BFFF",
+    "salmon": "#FA8072",
+    "rosybrown": "#BC8F8F",
+    "mediumslateblue": "#7B68EE",
+    "moccasin": "#FFE4B5",
+    "paleturquoise": "#AFEEEE",
+    "darkblue": "#00008B",
+    "navy": "#000080",
+    "steelblue": "#4682B4",
+    "crimson": "#DC143C",
+    "red": "#FF0000",
+    "bisque": "#FFE4C4",
+    "darkslategray": "#2F4F4F",
+    "maroon": "#800000",
+    "mediumpurple": "#9370DB",
+    "darkslateblue": "#483D8B",
+    "darksalmon": "#E9967A",
+    "deeppink": "#FF1493",
+    "seagreen": "#2E8B57",
+    "mediumvioletred": "#C71585",
+    "greenyellow": "#ADFF2F",
+    "springgreen": "#00FF7F",
+    "sandybrown": "#F4A460",
+    "brown": "#A52A2A",
+    "lightpink": "#FFB6C1",
+    "olive": "#808000",
+    "burlywood": "#DEB887",
+    "dodgerblue": "#1E90FF",
+    "darkolivegreen": "#556B2F",
+    "lightsalmon": "#FFA07A",
+    "aqua": "#00FFFF",
+    "khaki": "#F0E68C",
+    "pink": "#FFC0CB",
+    "green": "#008000",
+    "darkorange": "#FF8C00",
+    "rebeccapurple": "#663399",
+    "coral": "#FF7F50",
+    "darkviolet": "#9400D3",
+    "purple": "#800080",
+    "palevioletred": "#DB7093",
+    "lightseagreen": "#20B2AA",
+    "indianred": "#CD5C5C",
+    "darkkhaki": "#BDB76B",
+    "lightcoral": "#F08080",
+    "mediumturquoise": "#48D1CC",
+    "peachpuff": "#FFDAB9",
+    "skyblue": "#87CEEB",
+    "fuchsia": "#FF00FF",
+    "navajowhite": "#FFDEAD",
+    "lawngreen": "#7CFC00",
+    "cornflowerblue": "#6495ED",
+    "tan": "#D2B48C",
+    "darkred": "#8B0000",
+    "firebrick": "#B22222",
+    "gold": "#FFD700",
+    "yellow": "#FFFF00",
+    "wheat": "#F5DEB3",
+    "chartreuse": "#7FFF00",
+    "goldenrod": "#DAA520",
+    "violet": "#EE82EE",
+    "yellowgreen": "#9ACD32",
+    "cadetblue": "#5F9EA0",
+    "plum": "#DDA0DD",
+}

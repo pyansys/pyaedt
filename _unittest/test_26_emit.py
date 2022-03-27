@@ -1,12 +1,9 @@
-# Setup paths for module imports
-import gc
-
 # Import required modules
+from _unittest.conftest import BasisTest
+from _unittest.conftest import config
 from pyaedt import Emit
-from pyaedt.generic.filesystem import Scratch
-from pyaedt.modeler.PrimitivesEmit import EmitComponent, EmitComponents
-
-from _unittest.conftest import scratch_path, config
+from pyaedt.modeler.PrimitivesEmit import EmitComponent
+from pyaedt.modeler.PrimitivesEmit import EmitComponents
 
 try:
     import pytest
@@ -14,17 +11,13 @@ except ImportError:
     import _unittest_ironpython.conf_unittest as pytest
 
 
-class TestClass:
+class TestClass(BasisTest, object):
     def setup_class(self):
-        # set a scratch directory and the environment / test data
-        with Scratch(scratch_path) as self.local_scratch:
-            self.aedtapp = Emit()
+        BasisTest.my_setup(self)
+        self.aedtapp = BasisTest.add_app(self, application=Emit)
 
     def teardown_class(self):
-        self.aedtapp._desktop.ClearMessages("", "", 3)
-        assert self.aedtapp.close_project(saveproject=False)
-        self.local_scratch.remove()
-        gc.collect()
+        BasisTest.my_teardown(self)
 
     def test_objects(self):
         assert self.aedtapp.solution_type
@@ -34,18 +27,16 @@ class TestClass:
         assert self.aedtapp.modeler
         assert self.aedtapp.oanalysis is None
 
-    @pytest.mark.skipif(config["build_machine"], reason="Not functional in non-graphical mode")
+    @pytest.mark.skipif(config["NonGraphical"], reason="Not functional in non-graphical mode")
     def test_create_components(self):
-        radio = self.aedtapp.modeler.components.create_component(
-            "New Radio", "TestRadio")
+        radio = self.aedtapp.modeler.components.create_component("New Radio", "TestRadio")
         assert radio.name == "TestRadio"
         assert isinstance(radio, EmitComponent)
-        antenna = self.aedtapp.modeler.components.create_component(
-            "Antenna", "TestAntenna")
+        antenna = self.aedtapp.modeler.components.create_component("Antenna", "TestAntenna")
         assert antenna.name == "TestAntenna"
         assert isinstance(antenna, EmitComponent)
 
-    @pytest.mark.skipif(config["build_machine"], reason="Not functional in non-graphical mode")
+    @pytest.mark.skipif(config["NonGraphical"], reason="Not functional in non-graphical mode")
     @pytest.mark.skipif(config["desktopVersion"] < "2021.2", reason="Skipped on versions lower than 2021.2")
     def test_connect_components(self):
         radio = self.aedtapp.modeler.components.create_component("New Radio")
@@ -63,9 +54,9 @@ class TestClass:
         assert connected_comp is None
         assert connected_port is None
 
-    @pytest.mark.skipif(config["build_machine"], reason="Not functional in non-graphical mode")
+    @pytest.mark.skipif(config["NonGraphical"], reason="Not functional in non-graphical mode")
     def test_radio_component(self):
-        radio = self.aedtapp.modeler.schematic.create_component("New Radio")
+        radio = self.aedtapp.modeler.components.create_component("New Radio")
         # default radio has 1 Tx channel and 1 Rx channel
         assert radio.has_rx_channels()
         assert radio.has_tx_channels()

@@ -1,6 +1,6 @@
 """
-Polyline Example Analysis
--------------------------
+General: Polyline Creation
+--------------------------
 This example shows how you can use PyAEDT to create and manipulate polylines.
 """
 
@@ -19,10 +19,11 @@ from pyaedt.modeler.Primitives import PolylineSegment
 # This example creates a :class:`pyaedt.Maxwell3d` object and sets the unit
 # type to ``"mm"``.
 
-M3D = Maxwell3d(solution_type="Transient", designname="test_polyline_3D", specified_version="2021.2",
-                new_desktop_session=True)
+M3D = Maxwell3d(
+    solution_type="Transient", designname="test_polyline_3D", specified_version="2022.1", new_desktop_session=True
+)
 M3D.modeler.model_units = "mm"
-prim3D = M3D.modeler.primitives
+prim3D = M3D.modeler
 
 ###############################################################################
 # Clear Existing Objects
@@ -84,8 +85,8 @@ print("Created object with id {} and name {}.".format(P.id, prim3D.objects[P.id]
 ###############################################################################
 # Create a Spline Primitive
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
-# Here the segement is defined using a `PolylineSegment` object. This allows
-# you to prove additional input parameters to define the spine, such as the
+# Here the segment is defined using a `PolylineSegment` object. This allows
+# you to provide additional input parameters to define the spine, such as the
 # number of points (in this case 4). The parameter ``position_list``
 # must contain at least four position values.
 

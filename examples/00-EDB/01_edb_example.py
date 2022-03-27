@@ -1,9 +1,8 @@
 """
-EDB  Analysis
---------------
+Edb: Siwave Analysis from EDB Setup
+-----------------------------------
 This example shows how to use EDB to interact with a layout.
 """
-# sphinx_gallery_thumbnail_path = 'Resources/edb.png'
 
 import shutil
 
@@ -22,7 +21,7 @@ if os.path.exists(targetfolder):
     shutil.rmtree(targetfolder)
 shutil.copytree(example_path[:-8], targetfolder)
 targetfile = os.path.join(targetfolder)
-siwave_file = os.path.join(temp_folder, 'Galileo.siw')
+siwave_file = os.path.join(temp_folder, "Galileo.siw")
 print(targetfile)
 aedt_file = targetfile[:-4] + "aedt"
 
@@ -35,11 +34,11 @@ from pyaedt import Edb
 # Launch EDB
 # ~~~~~~~~~~
 # This example launches the :class:`pyaedt.Edb` class.
-# This example uses EDB 2021.2 and uses SI units.
+# This example uses EDB 2022R1 and uses SI units.
 
 if os.path.exists(aedt_file):
     os.remove(aedt_file)
-edb = Edb(edbpath=targetfile, edbversion="2021.2")
+edb = Edb(edbpath=targetfile, edbversion="2022.1")
 
 ###############################################################################
 # Compute Nets and Components
@@ -58,7 +57,7 @@ print("elapsed time = ", time.time() - start)
 # This example gets the position for a specific pin.
 # The next example shows how to get all pins for a specific component and get
 # the positions of each of them.
-# Each pin is a list of ``[X, Y]`` coordinate postions.
+# Each pin is a list of ``[X, Y]`` coordinate positions.
 
 pins = edb.core_components.get_pin_from_component("U2")
 for pin in pins:
@@ -74,7 +73,7 @@ edb.core_components.get_component_net_connection_info("U2")
 ###############################################################################
 # Compute Rats
 # ~~~~~~~~~~~~
-# This comman computes rats.
+# This command computes rats.
 
 rats = edb.core_components.get_rats()
 
@@ -142,12 +141,12 @@ edb.core_hfss.create_coax_port_on_component("U2A5", "V1P0_S0")
 # THis example edits the stackup and the material. You can change stackup
 # properties with assignment. Materials can be created and assigned to layers.
 
-edb.core_stackup.stackup_layers.layers['TOP'].thickness = "75um"
-edb.core_stackup.stackup_layers.layers['Diel1'].material_name = "Fr4_epoxy"
+edb.core_stackup.stackup_layers.layers["TOP"].thickness = "75um"
+# edb.core_stackup.stackup_layers.layers["Diel1"].material_name = "Fr4_epoxy"
 edb.core_stackup.create_debye_material("My_Debye", 5, 3, 0.02, 0.05, 1e5, 1e9)
 # edb.core_stackup.stackup_layers.layers['BOTTOM'].material_name = "My_Debye"
-edb.core_stackup.stackup_layers.remove_layer("Signal3")
-edb.core_stackup.stackup_layers.remove_layer("Signal1")
+# edb.core_stackup.stackup_layers.remove_layer("Signal3")
+# edb.core_stackup.stackup_layers.remove_layer("Signal1")
 
 
 ###############################################################################
@@ -171,6 +170,8 @@ edb.core_siwave.add_siwave_dc_analysis(settings)
 # This command saves modifications.
 
 edb.save_edb()
+edb.core_nets.plot(None, "TOP")
+
 edb.solve_siwave()
 
 ###############################################################################
@@ -187,7 +188,7 @@ edb.close_edb()
 # This command open Siwave and Generate Report. This works on Window Only.
 
 # from pyaedt import Siwave
-# siwave = Siwave("2021.2")
+# siwave = Siwave("2022.1")
 # siwave.open_project(siwave_file)
 # report_file = os.path.join(temp_folder,'Galileo.htm')
 #

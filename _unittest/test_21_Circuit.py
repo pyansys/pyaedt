@@ -1,20 +1,17 @@
-import gc
 import os
 import time
 
-# Import required modules
-from pyaedt import Circuit
-from pyaedt.generic.filesystem import Scratch
-from pyaedt.generic.TouchstoneParser import read_touchstone
+from _unittest.conftest import BasisTest
+from _unittest.conftest import config
+from _unittest.conftest import local_path
+from pyaedt import Circuit  # Setup paths for module imports
+from pyaedt.generic.TouchstoneParser import read_touchstone  # Setup paths for module imports
 
-# Setup paths for module imports
-from _unittest.conftest import local_path, scratch_path, config
 
 try:
     import pytest  # noqa: F401
 except ImportError:
     import _unittest_ironpython.conf_unittest as pytest  # noqa: F401
-
 
 original_project_name = "Galileo_t21"
 test_project_name = "Galileo_t21"
@@ -25,58 +22,37 @@ touchstone2 = "Galileo_V3P3S0.ts"
 ami_project = "AMI_Example"
 
 
-class TestClass:
+class TestClass(BasisTest, object):
     def setup_class(self):
-        with Scratch(scratch_path) as self.local_scratch:
-            time.sleep(2)
-            example_project = os.path.join(local_path, "example_models", original_project_name + ".aedt")
-            netlist_file1 = os.path.join(local_path, "example_models", netlist1)
-            netlist_file2 = os.path.join(local_path, "example_models", netlist2)
-            touchstone_file = os.path.join(local_path, "example_models", touchstone)
-            touchstone_file2 = os.path.join(local_path, "example_models", touchstone2)
-            self.test_project = self.local_scratch.copyfile(
-                example_project, os.path.join(self.local_scratch.path,
-                                              test_project_name + ".aedt"))
-            self.local_scratch.copyfile(netlist_file1)
-            self.local_scratch.copyfile(netlist_file2)
-            self.local_scratch.copyfile(touchstone_file)
-            self.local_scratch.copyfile(touchstone_file2)
-            self.local_scratch.copyfolder(
-                os.path.join(local_path, "example_models", original_project_name + ".aedb"),
-                os.path.join(self.local_scratch.path, test_project_name + ".aedb"),
-            )
-            ami_example_project = os.path.join(local_path, "example_models", ami_project + ".aedt")
-            self.ami_example_project = self.local_scratch.copyfile(ami_example_project)
-            self.local_scratch.copyfolder(
-                os.path.join(local_path, "example_models", ami_project + ".aedb"),
-                os.path.join(self.local_scratch.path, ami_project + ".aedb"),
-            )
-            self.aedtapp = Circuit(self.test_project)
+        BasisTest.my_setup(self)
+        self.aedtapp = BasisTest.add_app(self, original_project_name, application=Circuit)
+        self.circuitprj = BasisTest.add_app(self, "differential_pairs", application=Circuit)
+        netlist_file1 = os.path.join(local_path, "example_models", netlist1)
+        netlist_file2 = os.path.join(local_path, "example_models", netlist2)
+        touchstone_file = os.path.join(local_path, "example_models", touchstone)
+        touchstone_file2 = os.path.join(local_path, "example_models", touchstone2)
+        self.local_scratch.copyfile(netlist_file1)
+        self.local_scratch.copyfile(netlist_file2)
+        self.local_scratch.copyfile(touchstone_file)
+        self.local_scratch.copyfile(touchstone_file2)
 
     def teardown_class(self):
-        self.aedtapp._desktop.ClearMessages("", "", 3)
-        for proj in self.aedtapp.project_list:
-            try:
-                self.aedtapp.close_project(proj, saveproject=False)
-            except:
-                pass
-        self.local_scratch.remove()
-        gc.collect()
+        BasisTest.my_teardown(self)
 
-    def test_01_create_inductor(self):
+    def test_01a_create_inductor(self):
         myind = self.aedtapp.modeler.schematic.create_inductor(value=1e-9, location=[0.2, 0.2])
         assert type(myind.id) is int
-        assert myind.parameters["L"] == '1e-09'
+        assert myind.parameters["L"] == "1e-09"
 
     def test_02_create_resistor(self):
         myres = self.aedtapp.modeler.schematic.create_resistor(value=50, location=[0.4, 0.2])
         assert type(myres.id) is int
-        assert myres.parameters["R"] == '50'
+        assert myres.parameters["R"] == "50"
 
     def test_03_create_capacitor(self):
         mycap = self.aedtapp.modeler.schematic.create_capacitor(value=1e-12, location=[0.6, 0.2])
         assert type(mycap.id) is int
-        assert mycap.parameters["C"] == '1e-12'
+        assert mycap.parameters["C"] == "1e-12"
 
     def test_04_getpin_names(self):
         mycap2 = self.aedtapp.modeler.schematic.create_capacitor(value=1e-12)
@@ -87,16 +63,43 @@ class TestClass:
         assert type(pinnames) is list
         assert len(pinnames) == 2
 
-    def test_05_getpin_location(self):
+    def test_05a_getpin_location(self):
         for el in self.aedtapp.modeler.schematic.components:
             pinnames = self.aedtapp.modeler.schematic.get_pins(el)
             for pinname in pinnames:
                 pinlocation = self.aedtapp.modeler.schematic.get_pin_location(el, pinname)
                 assert len(pinlocation) == 2
 
-    def test_06_add_3dlayout_component(self):
+    def test_05b_add_pin_iport(self):
+        mycap3 = self.aedtapp.modeler.schematic.create_capacitor(value=1e-12)
+        assert self.aedtapp.modeler.schematic.add_pin_iports(mycap3.name, mycap3.id)
+
+    def test_05c_create_component(self):
+        assert self.aedtapp.modeler.schematic.create_new_component_from_symbol("Test", ["1", "2"])
+        assert self.aedtapp.modeler.schematic.create_new_component_from_symbol(
+            "Test1", [1, 2], parameter_list=["Author:=", "NumTerminals:="], parameter_value=["pyaedt", 2]
+        )
+
+    def test_06a_create_setup(self):
+        setup_name = "LNA"
+        LNA_setup = self.aedtapp.create_setup(setup_name)
+        assert LNA_setup.name == "LNA"
+
+    def test_06b_add_3dlayout_component(self):
         myedb = self.aedtapp.modeler.schematic.add_subcircuit_3dlayout("Galileo_G87173_204")
         assert type(myedb.id) is int
+        ports = myedb.pins
+        tx = ports
+        rx = ports
+        insertions = ["dB(S({},{}))".format(i.name, j.name) for i, j in zip(tx, rx)]
+        assert self.aedtapp.post.create_report(
+            insertions,
+            self.aedtapp.nominal_adaptive,
+            plotname="Insertion Losses",
+            plot_type="Rectangular Plot",
+            report_category="Standard",
+            subdesign_id=myedb.id,
+        )
 
     def test_07_add_hfss_component(self):
         my_model, myname = self.aedtapp.modeler.schematic.create_field_model(
@@ -105,8 +108,6 @@ class TestClass:
         assert type(my_model) is int
 
     def test_07a_push_excitation(self):
-        setup_name = "LNA"
-        LNA_setup = self.aedtapp.create_setup(setup_name)
         assert self.aedtapp.push_excitations(instance_name="U1", setup_name="LNA", thevenin_calculation=False)
         assert self.aedtapp.push_excitations(instance_name="U1", setup_name="LNA", thevenin_calculation=True)
 
@@ -117,6 +118,7 @@ class TestClass:
 
     def test_09_import_netlist(self):
         self.aedtapp.insert_design("SchematicImport")
+        self.aedtapp.modeler.schematic.limits_mils = 5000
         assert self.aedtapp.create_schematic_from_netlist(os.path.join(self.local_scratch.path, netlist1))
 
     def test_10_import_touchstone(self):
@@ -146,50 +148,28 @@ class TestClass:
         myres = self.aedtapp.modeler.schematic.create_resistor("R100", 50)
         mycap = self.aedtapp.modeler.schematic.create_capacitor("C100", 1e-12)
         portname = self.aedtapp.modeler.schematic.create_interface_port("Port1")
+        assert len(self.aedtapp.excitations) > 0
         assert "Port1" in portname.name
-
-        assert self.aedtapp.modeler.connect_schematic_components(myind.id, myind.id, pinnum_second=2)
+        assert myind.pins[0].connect_to_component(portname.pins[0])
+        assert myind.pins[1].connect_to_component(myres.pins[1])
         assert self.aedtapp.modeler.connect_schematic_components(myres.id, mycap.id, pinnum_first=1)
-
+        gnd = self.aedtapp.modeler.schematic.create_gnd()
+        assert mycap.pins[1].connect_to_component(gnd.pins[0])
         # create_interface_port
         L1_pins = myind.pins
         L1_pin2location = {}
         for pin in L1_pins:
             L1_pin2location[pin.name] = pin.location
 
-        C1_pins = mycap.pins
-        C1_pin2location = {}
-        for pin in C1_pins:
-            C1_pin2location[pin.name] = pin.location
-
-        portname = self.aedtapp.modeler.schematic.create_interface_port(
-            "P1_1", [L1_pin2location["n1"][0], L1_pin2location["n1"][1]]
-        )
-        assert "P1_1" in portname.name
-        portname = self.aedtapp.modeler.schematic.create_interface_port(
-            "P2_2", [C1_pin2location["negative"][0], C1_pin2location["negative"][1]]
-        )
-        assert "P2_2" in portname.name
-
-        # create_page_port
-        portname = self.aedtapp.modeler.schematic.create_page_port(
-            "Link_1", [L1_pin2location["n2"][0], L1_pin2location["n2"][1]]
-        )
-        assert "Link_1" in portname.name
-        portname = self.aedtapp.modeler.schematic.create_page_port(
-            "Link_2", [C1_pin2location["positive"][0], C1_pin2location["positive"][1]], 180
-        )
-        assert "Link_2" in portname.name
-
     def test_13_properties(self):
         assert self.aedtapp.modeler.model_units
 
     def test_14_move(self):
-        assert self.aedtapp.modeler.move("L100", [0.00508, 0.00508])
-        assert self.aedtapp.modeler.move("L100", [200, 200], "mil")
+        assert self.aedtapp.modeler.move("L100", [0, -0.00508])
+        assert self.aedtapp.modeler.move("L100", [0, 200], "mil")
 
     def test_15_rotate(self):
-        assert self.aedtapp.modeler.rotate("L100")
+        assert self.aedtapp.modeler.rotate("Port1")
 
     def test_16_read_touchstone(self):
         data = read_touchstone(os.path.join(self.local_scratch.path, touchstone))
@@ -197,6 +177,10 @@ class TestClass:
         assert data.data_real()
         assert data.data_imag()
         assert data.data_db()
+
+        data_with_verbose = read_touchstone(os.path.join(self.local_scratch.path, touchstone), verbose=True)
+        assert max(data_with_verbose.data_magnitude()) > 0.37
+        assert max(data_with_verbose.data_magnitude()) < 0.38
 
     def test_17_create_setup(self):
         setup_name = "Dom_LNA"
@@ -237,13 +221,13 @@ class TestClass:
         assert self.aedtapp.create_setup(setup_name, "NexximAMI")
 
     def test_20_create_AMI_plots(self):
-        self.aedtapp.load_project(self.ami_example_project, close_active_proj=True)
+        ami_design = BasisTest.add_app(self, ami_project, application=Circuit)
         report_name = "MyReport"
         assert (
-            self.aedtapp.post.create_ami_initial_response_plot(
+            ami_design.post.create_ami_initial_response_plot(
                 "AMIAnalysis",
                 "b_input_15",
-                self.aedtapp.available_variations.nominal,
+                ami_design.available_variations.nominal,
                 plot_type="Rectangular Stacked Plot",
                 plot_final_response=True,
                 plot_intermediate_response=True,
@@ -252,20 +236,20 @@ class TestClass:
             == report_name
         )
         setup_name = "Dom_Verify"
-        assert self.aedtapp.create_setup(setup_name, "NexximVerifEye")
+        assert ami_design.create_setup(setup_name, "NexximVerifEye")
         setup_name = "Dom_Quick"
-        assert self.aedtapp.create_setup(setup_name, "NexximQuickEye")
+        assert ami_design.create_setup(setup_name, "NexximQuickEye")
         assert (
-            self.aedtapp.post.create_ami_statistical_eye_plot(
-                "AMIAnalysis", "b_output4_14", self.aedtapp.available_variations.nominal, plotname="MyReport1"
+            ami_design.post.create_ami_statistical_eye_plot(
+                "AMIAnalysis", "b_output4_14", ami_design.available_variations.nominal, plotname="MyReport1"
             )
             == "MyReport1"
         )
         assert (
-            self.aedtapp.post.create_statistical_eye_plot(
+            ami_design.post.create_statistical_eye_plot(
                 "Dom_Quick",
                 "b_input_15.int_ami_rx.eye_probe",
-                self.aedtapp.available_variations.nominal,
+                ami_design.available_variations.nominal,
                 plotname="MyReportQ",
             )
             == "MyReportQ"
@@ -316,3 +300,48 @@ class TestClass:
         assert len(t1.pins) == 6
         t2 = self.aedtapp.modeler.schematic.create_touchsthone_component(touch)
         assert t2
+
+    def test_25_zoom_to_fit(self):
+        self.aedtapp.insert_design("zoom_test")
+        myind = self.aedtapp.modeler.schematic.create_inductor("L100", 1e-9)
+        myres = self.aedtapp.modeler.components.create_resistor("R100", 50)
+        mycap = self.aedtapp.modeler.components.create_capacitor("C100", 1e-12)
+        self.aedtapp.modeler.zoom_to_fit()
+
+    def test_26_component_catalog(self):
+        comp_catalog = self.aedtapp.modeler.components.components_catalog
+        assert comp_catalog["Capacitors:Cap_"]
+        assert comp_catalog["capacitors:cAp_"]
+        assert isinstance(comp_catalog.find_components("cap"), list)
+        assert comp_catalog["LISN:CISPR25_LISN"].place("Lisn1")
+        assert not comp_catalog["Capacitors"]
+        assert comp_catalog["LISN:CISPR25_LISN"].props
+
+    def test_27_set_differential_pairs(self):
+        assert self.circuitprj.set_differential_pair(
+            positive_terminal="Port3",
+            negative_terminal="Port4",
+            common_name=None,
+            diff_name=None,
+            common_ref_z=34,
+            diff_ref_z=123,
+            active=True,
+        )
+        assert self.circuitprj.set_differential_pair(positive_terminal="Port3", negative_terminal="Port5")
+
+    def test_28_load_and_save_diff_pair_file(self):
+        diff_def_file = os.path.join(local_path, "example_models", "differential_pairs_definition.txt")
+        diff_file = self.local_scratch.copyfile(diff_def_file)
+        assert self.circuitprj.load_diff_pairs_from_file(diff_file)
+
+        diff_file2 = os.path.join(self.local_scratch.path, "diff_file2.txt")
+        assert self.circuitprj.save_diff_pairs_to_file(diff_file2)
+        with open(diff_file2, "r") as fh:
+            lines = fh.read().splitlines()
+        assert len(lines) == 3
+
+    def test_29_create_circuit_from_spice(self):
+        model = os.path.join(local_path, "example_models", "test.lib")
+        assert self.aedtapp.modeler.schematic.create_component_from_spicemodel(model)
+        assert self.aedtapp.modeler.schematic.create_component_from_spicemodel(model, "GRM2345")
+        assert not self.aedtapp.modeler.schematic.create_component_from_spicemodel(model, "GRM2346")

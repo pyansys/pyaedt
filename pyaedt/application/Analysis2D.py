@@ -1,9 +1,10 @@
 import os
 
 from pyaedt.application.Analysis import Analysis
+from pyaedt.generic.general_methods import is_ironpython
+from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.modeler.Model2D import Modeler2D
 from pyaedt.modules.Mesh import Mesh
-from pyaedt.generic.general_methods import aedt_exception_handler, is_ironpython
 
 if is_ironpython:
     from pyaedt.modules.PostProcessor import PostProcessor
@@ -131,11 +132,63 @@ class FieldAnalysis2D(Analysis):
         """
         return self._mesh
 
-    # @property
-    # def post(self):
-    #     return self._post
+    @pyaedt_function_handler()
+    def plot(
+        self,
+        objects=None,
+        show=True,
+        export_path=None,
+        plot_as_separate_objects=True,
+        plot_air_objects=True,
+        force_opacity_value=None,
+        clean_files=False,
+    ):
+        """Plot the model or a subset of objects.
 
-    @aedt_exception_handler
+        Parameters
+        ----------
+        objects : list, optional
+            List of objects to plot. The default is ``None``, in which case all objects
+            are exported.
+        show : bool, optional
+            Whether to show the plot after generation. The default is ``True``. If ``False``,
+            the generated class is returned for more customization before showing the plot.
+        export_path : str, optional
+            Path for the image file to save the plot to. The default is ``None``, in which case
+            no image file is saved.
+        plot_as_separate_objects : bool, optional
+            Whether to plot each object separately. The default is ``True``, which may require
+            more time to export from AEDT.
+        plot_air_objects : bool, optional
+            Whether to also plot air and vacuum objects. The default is ``True``.
+        force_opacity_value : float, optional
+            Opacity value between 0 and 1 to apply to all of the model. The default is ``None``,
+            in which case the AEDT opacity value is applied to each object.
+        clean_files : bool, optional
+            Whether to clean created files after plot generation. The default is ``False``, in
+            which case the cache is maintained into the model object that is returned.
+
+        Returns
+        -------
+        :class:`pyaedt.generic.plot.ModelPlotter`
+            Model Object.
+        """
+        if is_ironpython:
+            self.logger.warning("Plot is available only on CPython")
+        elif self._aedt_version < "2021.2":
+            self.logger.warning("Plot is supported from AEDT 2021 R2.")
+        else:
+            return self.post.plot_model_obj(
+                objects=objects,
+                show=show,
+                export_path=export_path,
+                plot_as_separate_objects=plot_as_separate_objects,
+                plot_air_objects=plot_air_objects,
+                force_opacity_value=force_opacity_value,
+                clean_files=clean_files,
+            )
+
+    @pyaedt_function_handler()
     def export_mesh_stats(self, setup_name, variation_string="", mesh_path=None):
         """Export mesh statistics to a file.
 
@@ -144,14 +197,15 @@ class FieldAnalysis2D(Analysis):
         setup_name :str
             Setup name.
         variation_string : str, optional
-            Variation List.
+            Variation list.
         mesh_path : str, optional
-            Full path to mesh statistics file.
+            Full path to the mesh statistics file. The default is ``None``, in which
+            case the working directory is used.
 
         Returns
         -------
         str
-            File Path.
+            File path.
 
         References
         ----------
@@ -159,11 +213,11 @@ class FieldAnalysis2D(Analysis):
         >>> oDesign.ExportMeshStats
         """
         if not mesh_path:
-            mesh_path = os.path.join(self.project_path, "meshstats.ms")
+            mesh_path = os.path.join(self.working_directory, "meshstats.ms")
         self.odesign.ExportMeshStats(setup_name, variation_string, mesh_path)
         return mesh_path
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def assign_material(self, obj, mat):
         """Assign a material to one or more objects.
 
@@ -186,41 +240,23 @@ class FieldAnalysis2D(Analysis):
         >>> oEditor.AssignMaterial
         """
         mat = mat.lower()
-        selections = self.modeler.convert_to_selections(obj)
-        arg1 = ["NAME:Selections"]
-        arg1.append("Selections:="), arg1.append(selections)
-        arg2 = ["NAME:Attributes"]
-        arg2.append("MaterialValue:="), arg2.append(chr(34) + mat + chr(34))
-        if mat in self.materials.material_keys:
-            Mat = self.materials.material_keys[mat]
-            Mat.update()
-            if Mat.is_dielectric():
-                arg2.append("SolveInside:="), arg2.append(True)
-            else:
-                arg2.append("SolveInside:="), arg2.append(False)
-            self.modeler.oeditor.AssignMaterial(arg1, arg2)
-            self.logger.info("Assign Material " + mat + " to object " + selections)
-            if isinstance(obj, list):
-                for el in obj:
-                    self.modeler.primitives[el].material_name = mat
-            else:
-                self.modeler.primitives[obj].material_name = mat
-            return True
-        elif self.materials.checkifmaterialexists(mat):
-            self.materials._aedmattolibrary(mat)
-            Mat = self.materials.material_keys[mat]
-            if Mat.is_dielectric():
-                arg2.append("SolveInside:="), arg2.append(True)
-            else:
-                arg2.append("SolveInside:="), arg2.append(False)
-            self.modeler.oeditor.AssignMaterial(arg1, arg2)
-            self.logger.info("Assign Material " + mat + " to object " + selections)
-            if isinstance(obj, list):
-                for el in obj:
-                    self.modeler.primitives[el].material_name = mat
-            else:
-                self.modeler.primitives[obj].material_name = mat
+        selections = self.modeler.convert_to_selections(obj, True)
 
+        mat_exists = False
+        if mat in self.materials.material_keys:
+            mat_exists = True
+        if mat_exists or self.materials.checkifmaterialexists(mat):
+            Mat = self.materials.material_keys[mat]
+            if mat_exists:
+                Mat.update()
+            self.logger.info("Assign Material " + mat + " to object " + str(selections))
+            for el in selections:
+                self.modeler[el].material_name = mat
+                self.modeler[el].color = self.materials.material_keys[mat].material_appearance
+                if Mat.is_dielectric():
+                    self.modeler[el].solve_inside = True
+                else:
+                    self.modeler[el].solve_inside = False
             return True
         else:
             self.logger.error("Material does not exist.")

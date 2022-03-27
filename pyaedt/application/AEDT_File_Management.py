@@ -3,10 +3,10 @@ import os
 import re
 import shutil
 
-from pyaedt.generic.general_methods import aedt_exception_handler
+from pyaedt.generic.general_methods import pyaedt_function_handler
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def read_info_fromcsv(projdir, name):
     """Read information from a CSV file and return a list.
 
@@ -15,7 +15,7 @@ def read_info_fromcsv(projdir, name):
     projdir : str
         Full path to the file.
     name : str
-        Name of the file,
+        Name of the file.
 
     Returns
     -------
@@ -32,14 +32,14 @@ def read_info_fromcsv(projdir, name):
     return listmcad
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def clean_proj_folder(dir, name):
     """Delete all project name-related folders.
 
     Parameters
     ----------
     dir : str
-        Full path to the project directory
+        Full path to the project directory.
     name : str
         Name of the project.
 
@@ -54,7 +54,7 @@ def clean_proj_folder(dir, name):
     return True
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def create_output_folder(ProjectDir):
     """Create the output folders starting from the project directory.
 
@@ -88,7 +88,7 @@ def create_output_folder(ProjectDir):
     return PicturePath, ResultsPath
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def change_objects_visibility(origfile, solid_list):
     """Edit the project file to make only the solids that are specified visible.
 
@@ -119,9 +119,10 @@ def change_objects_visibility(origfile, solid_list):
                 r"(\$begin 'EditorWindow'\n.+)(Drawings\[.+\])(.+\n\s*\$end 'EditorWindow')", re.UNICODE
             )
             # Replacing string
+            # fmt: off
             ViewStr = u"Drawings[" + unicode(str(len(solid_list))) + u": " + unicode(str(solid_list).strip("["))
             s = pattern.sub(r"\1" + ViewStr + r"\3", content)
-
+            # fmt: on
             # writing file content
             n.write(str(s))
 
@@ -134,7 +135,7 @@ def change_objects_visibility(origfile, solid_list):
         print("change_objects_visibility: Project %s is still locked." % origfile)
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def change_model_orientation(origfile, bottom_dir):
     """Edit the project file to change the model orientation.
 
@@ -177,7 +178,7 @@ def change_model_orientation(origfile, bottom_dir):
 
     if not os.path.isfile(origfile + ".lock"):  # check if the project is closed
 
-        # opening files
+        # Opening files
         with open(origfile, "rb") as f, open(newfile, "wb") as n:
 
             # Reading file content
@@ -193,12 +194,12 @@ def change_model_orientation(origfile, bottom_dir):
             # u": " + unicode(str(SolidList).strip("["))
             s = pattern.sub(r"\1" + OrientStr + r"\3", content)
 
-            # writing file content
+            # Writing file content
             n.write(str(s))
 
-        # renaming files and deleting temp
+        # Renaming files and deleting temp
         os.remove(origfile)
         os.rename(newfile, origfile)
 
-    else:  # project is locked
+    else:  # Project is locked
         print("change_model_orientation: Project %s is still locked." % origfile)

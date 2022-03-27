@@ -1,7 +1,6 @@
 """
-
-Maxwell 2D Analysis
--------------------
+Maxwell 2d: Transient Winding Analysis
+--------------------------------------
 This example shows how you can use PyAEDT to create a project in Maxwell 2D
 and run a transient simulation. It runs only on Windows using CPython.
 
@@ -36,7 +35,7 @@ non_graphical = True
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # This example inserts a Maxwell 2D design and then saves the project.
 
-maxwell_2d = Maxwell2d(solution_type="TransientXY", specified_version="2021.2", non_graphical=non_graphical)
+maxwell_2d = Maxwell2d(solution_type="TransientXY", specified_version="2022.1", non_graphical=non_graphical)
 project_dir = maxwell_2d.generate_temp_project_directory("Example")
 maxwell_2d.save_project(os.path.join(project_dir, "M2d.aedt"))
 
@@ -45,16 +44,16 @@ maxwell_2d.save_project(os.path.join(project_dir, "M2d.aedt"))
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # This example creates a rectangle and then duplicates it.
 
-rect1 = maxwell_2d.modeler.primitives.create_rectangle([0, 0, 0], [10, 20], name="winding", matname="copper")
+rect1 = maxwell_2d.modeler.create_rectangle([0, 0, 0], [10, 20], name="winding", matname="copper")
 added = rect1.duplicate_along_line([14, 0, 0])
-rect2 = maxwell_2d.modeler.primitives[added[0]]
+rect2 = maxwell_2d.modeler[added[0]]
 
 ###############################################################################
 # Create an Air Region
 # ~~~~~~~~~~~~~~~~~~~~
 # This command creates an air region.
 
-region = maxwell_2d.modeler.primitives.create_region([100, 100, 100, 100, 100, 100])
+region = maxwell_2d.modeler.create_region([100, 100, 100, 100, 100, 100])
 
 ###############################################################################
 # Assign Windings to Sheets and a Balloon to the Air Region
@@ -63,6 +62,14 @@ region = maxwell_2d.modeler.primitives.create_region([100, 100, 100, 100, 100, 1
 
 maxwell_2d.assign_winding([rect1.name, rect2.name], name="PHA")
 maxwell_2d.assign_balloon(region.edges)
+
+
+###############################################################################
+# Plot the model
+# ~~~~~~~~~~~~~~
+
+maxwell_2d.plot(show=False, export_path=os.path.join(maxwell_2d.working_directory, "Image.jpg"), plot_air_objects=True)
+
 
 ###############################################################################
 # Add a Transient Setup
@@ -76,15 +83,14 @@ setup.props["SaveFieldsType"] = "Every N Steps"
 setup.props["N Steps"] = "1"
 setup.props["Steps From"] = "0s"
 setup.props["Steps To"] = "0.002s"
-setup.update()
 
 ###############################################################################
 # Create a Rectangular Plot
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 # This command creates a rectangular plot.
 
-maxwell_2d.post.create_rectangular_plot(
-    "InputCurrent(PHA)", primary_sweep_variable="Time", families_dict={"Time": ["All"]}, plotname="Winding Plot 1"
+maxwell_2d.post.create_report(
+    "InputCurrent(PHA)", domain="Time", primary_sweep_variable="Time", plotname="Winding Plot 1"
 )
 
 ###############################################################################
@@ -99,25 +105,39 @@ maxwell_2d.analyze_nominal()
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # This example creates the output and then plots it using PyVista.
 
-import time
-
-start = time.time()
 cutlist = ["Global:XY"]
 face_lists = rect1.faces
 face_lists += rect2.faces
-timesteps = [str(i * 1e-3) + "s" for i in range(21)]
+timesteps = [str(i * 2e-4) + "s" for i in range(11)]
 id_list = [f.id for f in face_lists]
-# animatedGif=maxwell_2d.post.animate_fields_from_aedtplt_2(
-#   "Mag_B",
-#   id_list,
-#   "Surface",
-#   intrinsic_dict={'Time': '0s'},
-#   variation_variable="Time",
-#   variation_list=timesteps,
-#   off_screen=True,
-#   export_gif=True
-# )
+animatedGif = maxwell_2d.post.animate_fields_from_aedtplt_2(
+    "Mag_B",
+    id_list,
+    "Surface",
+    intrinsic_dict={"Time": "0s"},
+    variation_variable="Time",
+    variation_list=timesteps,
+    show=False,
+    export_gif=False,
+)
+animatedGif.isometric_view = False
+animatedGif.camera_position = [15, 15, 80]
+animatedGif.focal_point = [15, 15, 0]
+animatedGif.roll_angle = 0
+animatedGif.elevation_angle = 0
+animatedGif.azimuth_angle = 0
+# Set off_screen to False to visualize the animation.
+# animatedGif.off_screen = False
+animatedGif.animate()
 
+###############################################################################
+# Postprocessing
+# --------------
+# The same report can be obtained outside electronic desktop with the
+# following commands.
+
+solutions = maxwell_2d.post.get_solution_data("InputCurrent(PHA)", domain="Time", primary_sweep_variable="Time")
+solutions.plot()
 
 ###############################################
 # Close AEDT

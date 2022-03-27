@@ -1,9 +1,8 @@
 """
-HFSS 3D Layout Analysis
------------------------
+Hfss 3D Layout: PCB and EDB in 3D Layout
+----------------------------------------
 This example shows how to use HFSS 3D Layout combined with EDB to interact with a layout.
 """
-# sphinx_gallery_thumbnail_path = 'Resources/edb2.png'
 
 
 import os
@@ -34,11 +33,11 @@ aedt_file = targetfile[:-12] + "aedt"
 ###############################################################################
 # Launch AEDT
 # ~~~~~~~~~~~
-# This example launches AEDT 2021.2 in graphical model.
+# This example launches AEDT 2022R1 in graphical model.
 
 # This example uses SI units.
 
-desktopVersion = "2021.2"
+desktopVersion = "2022.1"
 
 
 ###############################################################################
@@ -62,12 +61,6 @@ if os.path.exists(aedt_file):
 h3d = Hfss3dLayout(targetfile)
 h3d.save_project(os.path.join(temp_folder, "edb_demo.aedt"))
 
-###############################################################################
-# Print Setups
-# ~~~~~~~~~~~~
-# The example prints setups from the `setups` object.
-
-h3d.setups[0].props
 
 ###############################################################################
 # Print boundaries from the `setups` object.
@@ -79,14 +72,16 @@ h3d.boundaries
 # ~~~~~~~~~~~~~
 # This example hides all nets.
 
-h3d.modeler.primitives.change_net_visibility(visible=False)
+h3d.modeler.change_net_visibility(visible=False)
 
 ###############################################################################
 # Show Only Two Nets
 # ~~~~~~~~~~~~~~~~~~
 # This examples shows only the two specified nets.
 
-h3d.modeler.primitives.change_net_visibility(["A0_GPIO", "A0_MUX"], visible=True)
+h3d.modeler.change_net_visibility(["A0_GPIO", "A0_MUX"], visible=True)
+
+h3d.modeler.edb.core_nets.plot(["A0_GPIO", "A0_MUX"])
 
 ###############################################################################
 # Show All Layers

@@ -1,13 +1,12 @@
-import gc
 import os
 import time
 
-# Import required modules
+from _unittest.conftest import BasisTest
+from _unittest.conftest import is_ironpython
+from _unittest.conftest import local_path
+from _unittest.conftest import scratch_path
 from pyaedt import Hfss3dLayout
 from pyaedt.generic.filesystem import Scratch
-
-# Setup paths for module imports
-from _unittest.conftest import scratch_path
 
 try:
     import pytest  # noqa: F401
@@ -15,23 +14,20 @@ except ImportError:
     import _unittest_ironpython.conf_unittest as pytest  # noqa: F401
 
 # Input Data and version for the test
+test_project_name = "Test_RadioBoard"
 
-test_project_name = "Test_RadioBoard.aedt"
 
-
-class TestClass:
+class TestClass(BasisTest, object):
     def setup_class(self):
-        with Scratch(scratch_path) as self.local_scratch:
-            self.test_project = os.path.join(self.local_scratch.path, test_project_name)
-            try:
-                self.aedtapp = Hfss3dLayout(self.test_project)
-            except:
-                self.aedtapp = None
+        BasisTest.my_setup(self)
+        self.aedtapp = BasisTest.add_app(self, project_name=test_project_name, application=Hfss3dLayout)
+        self.hfss3dl = BasisTest.add_app(self, project_name="differential_pairs", application=Hfss3dLayout)
+        example_project = os.path.join(local_path, "example_models", "Package.aedb")
+        self.target_path = os.path.join(self.local_scratch.path, "Package_test_41.aedb")
+        self.local_scratch.copyfolder(example_project, self.target_path)
 
     def teardown_class(self):
-        self.aedtapp._desktop.ClearMessages("", "", 3)
-        self.aedtapp.close_project(self.aedtapp.project_name, saveproject=False)
-        gc.collect()
+        BasisTest.my_teardown(self)
 
     def test_01_creatematerial(self):
         mymat = self.aedtapp.materials.add_material("myMaterial")
@@ -126,40 +122,40 @@ class TestClass:
         s1.update_stackup_layer()
 
     def test_03_create_circle(self):
-        n1 = self.aedtapp.modeler.primitives.create_circle("Top", 0, 5, 40, "mycircle")
+        n1 = self.aedtapp.modeler.create_circle("Top", 0, 5, 40, "mycircle")
         assert n1 == "mycircle"
 
     def test_04_create_create_rectangle(self):
-        n2 = self.aedtapp.modeler.primitives.create_rectangle("Top", [0, 0], [6, 8], 3, 2, "myrectangle")
+        n2 = self.aedtapp.modeler.create_rectangle("Top", [0, 0], [6, 8], 3, 2, "myrectangle")
         assert n2 == "myrectangle"
 
     def test_05_subtract(self):
         assert self.aedtapp.modeler.subtract("mycircle", "myrectangle")
 
     def test_06_unite(self):
-        n1 = self.aedtapp.modeler.primitives.create_circle("Top", 0, 5, 8, "mycircle2")
-        n2 = self.aedtapp.modeler.primitives.create_rectangle("Top", [0, 0], [6, 8], 3, 2, "myrectangle2")
+        n1 = self.aedtapp.modeler.create_circle("Top", 0, 5, 8, "mycircle2")
+        n2 = self.aedtapp.modeler.create_rectangle("Top", [0, 0], [6, 8], 3, 2, "myrectangle2")
         assert self.aedtapp.modeler.unite([n1, n2])
 
     def test_07_intersect(self):
-        n1 = self.aedtapp.modeler.primitives.create_circle("Top", 0, 5, 8, "mycircle3")
-        n2 = self.aedtapp.modeler.primitives.create_rectangle("Top", [0, 0], [6, 8], 3, 2, "myrectangle3")
+        n1 = self.aedtapp.modeler.create_circle("Top", 0, 5, 8, "mycircle3")
+        n2 = self.aedtapp.modeler.create_rectangle("Top", [0, 0], [6, 8], 3, 2, "myrectangle3")
         assert self.aedtapp.modeler.intersect([n1, n2])
 
     def test_08_objectlist(self):
-        a = self.aedtapp.modeler.primitives.geometries
+        a = self.aedtapp.modeler.geometries
         assert len(a) > 0
 
     def test_09_modify_padstack(self):
-        pad_0 = self.aedtapp.modeler.primitives.padstacks["PlanarEMVia"]
-        assert self.aedtapp.modeler.primitives.padstacks["PlanarEMVia"].plating != 55
+        pad_0 = self.aedtapp.modeler.padstacks["PlanarEMVia"]
+        assert self.aedtapp.modeler.padstacks["PlanarEMVia"].plating != 55
         pad_0.plating = 55
         pad_0.update()
-        self.aedtapp.modeler.primitives.init_padstacks()
-        assert self.aedtapp.modeler.primitives.padstacks["PlanarEMVia"].plating == "55"
+        self.aedtapp.modeler.init_padstacks()
+        assert self.aedtapp.modeler.padstacks["PlanarEMVia"].plating == "55"
 
     def test_10_create_padstack(self):
-        pad1 = self.aedtapp.modeler.primitives.new_padstack("My_padstack2")
+        pad1 = self.aedtapp.modeler.new_padstack("My_padstack2")
         hole1 = pad1.add_hole()
         pad1.add_layer("Start", pad_hole=hole1, thermal_hole=hole1)
         hole2 = pad1.add_hole(holetype="Rct", sizes=[0.5, 0.8])
@@ -170,13 +166,13 @@ class TestClass:
         assert pad1.create()
 
     def test_11_create_via(self):
-        via = self.aedtapp.modeler.primitives.create_via("My_padstack2", x=0, y=0)
+        via = self.aedtapp.modeler.create_via("My_padstack2", x=0, y=0)
         assert type(via) is str
-        via = self.aedtapp.modeler.primitives.create_via("My_padstack2", x=10, y=10, name="Via123", netname="VCC")
+        via = self.aedtapp.modeler.create_via("My_padstack2", x=10, y=10, name="Via123", netname="VCC")
         assert via == "Via123"
 
     def test_12_create_line(self):
-        line = self.aedtapp.modeler.primitives.create_line(
+        line = self.aedtapp.modeler.create_line(
             "Bottom", [[0, 0], [10, 30], [20, 30]], lw=1, name="line1", netname="VCC"
         )
         assert line == "line1"
@@ -184,6 +180,7 @@ class TestClass:
     def test_13a_create_edge_port(self):
         assert self.aedtapp.create_edge_port("line1", 3, False)
         assert self.aedtapp.create_edge_port("line1", 0, True)
+        assert len(self.aedtapp.excitations) > 0
 
     def test_14a_create_coaxial_port(self):
         assert self.aedtapp.create_coax_port("Via123", "Bottom", "Top", 10, 10, 10, 10)
@@ -231,7 +228,8 @@ class TestClass:
         assert setup4.enable()
 
     def test_18a_create_linear_count_sweep(self):
-        setup_name = "RFBoardSetup"
+        setup_name = "RF_create_linear_count"
+        self.aedtapp.create_setup(setupname=setup_name)
         sweep1 = self.aedtapp.create_linear_count_sweep(
             setupname=setup_name,
             unit="GHz",
@@ -263,7 +261,8 @@ class TestClass:
         assert sweep2.props["Sweeps"]["Data"] == "LINC 1GHz 10GHz 12"
 
     def test_18b_create_linear_step_sweep(self):
-        setup_name = "RFBoardSetup"
+        setup_name = "RF_create_linear_step"
+        self.aedtapp.create_setup(setupname=setup_name)
         sweep3 = self.aedtapp.create_linear_step_sweep(
             setupname=setup_name,
             unit="GHz",
@@ -291,8 +290,27 @@ class TestClass:
         )
         assert sweep4.props["Sweeps"]["Data"] == "LIN 1GHz 10GHz 0.12GHz"
 
+        # Create a linear step sweep with the incorrect sweep type.
+        exception_raised = False
+        try:
+            sweep_raising_error = self.aedtapp.create_linear_step_sweep(
+                setupname=setup_name,
+                unit="GHz",
+                freqstart=1,
+                freqstop=10,
+                step_size=0.12,
+                sweepname="RFBoardSweep4",
+                sweep_type="Incorrect",
+                save_fields=True,
+            )
+        except AttributeError as e:
+            exception_raised = True
+            assert e.args[0] == "Invalid `sweep_type`. It has to be either 'Discrete', 'Interpolating', or 'Fast'"
+        assert exception_raised
+
     def test_18c_create_single_point_sweep(self):
-        setup_name = "RFBoardSetup"
+        setup_name = "RF_create_single_point"
+        self.aedtapp.create_setup(setupname=setup_name)
         sweep5 = self.aedtapp.create_single_point_sweep(
             setupname=setup_name,
             unit="MHz",
@@ -308,7 +326,20 @@ class TestClass:
             sweepname="RFBoardSingle",
             save_fields=False,
         )
-        assert sweep6.props["Sweeps"]["Data"] == '1GHz 2GHz 3GHz 4GHz'
+        assert sweep6.props["Sweeps"]["Data"] == "1GHz 2GHz 3GHz 4GHz"
+
+        try:
+            sweep7 = self.aedtapp.create_single_point_sweep(
+                setupname=setup_name,
+                unit="GHz",
+                freq=[],
+                sweepname="RFBoardSingle",
+                save_fields=False,
+            )
+        except AttributeError as e:
+            exception_raised = True
+            assert e.args[0] == "Frequency list is empty. Specify at least one frequency point."
+        assert exception_raised
 
     def test_18d_delete_setup(self):
         setup_name = "SetupToDelete"
@@ -323,7 +354,9 @@ class TestClass:
         assert self.aedtapp.validate_full_design(ports=3)
 
     def test_19B_analyze_setup(self):
+        self.aedtapp.save_project()
         assert self.aedtapp.analyze_setup("RFBoardSetup3")
+        self.aedtapp.save_project()
         assert os.path.exists(self.aedtapp.export_profile("RFBoardSetup3"))
         assert os.path.exists(self.aedtapp.export_mesh_stats("RFBoardSetup3"))
 
@@ -383,14 +416,14 @@ class TestClass:
         assert new_material.name == "secondmaterial"
 
     def test30_expand(self):
-        self.aedtapp.modeler.primitives.create_rectangle("Bottom", [20, 20], [50, 50], name="rect_1")
-        self.aedtapp.modeler.primitives.create_line("Bottom", [[25, 25], [40, 40]], name="line_3")
+        self.aedtapp.modeler.create_rectangle("Bottom", [20, 20], [50, 50], name="rect_1")
+        self.aedtapp.modeler.create_line("Bottom", [[25, 25], [40, 40]], name="line_3")
         out1 = self.aedtapp.modeler.expand("line_3", size=1, expand_type="ROUND", replace_original=False)
         assert isinstance(out1, str)
 
     def test31_heal(self):
-        l1 = self.aedtapp.modeler.primitives.create_line("Bottom", [[0, 0], [100, 0]], 0.5, name="poly_1111")
-        l2 = self.aedtapp.modeler.primitives.create_line("Bottom", [[100, 0], [120, -35]], 0.5, name="poly_2222")
+        l1 = self.aedtapp.modeler.create_line("Bottom", [[0, 0], [100, 0]], 0.5, name="poly_1111")
+        l2 = self.aedtapp.modeler.create_line("Bottom", [[100, 0], [120, -35]], 0.5, name="poly_2222")
         self.aedtapp.modeler.unite([l1, l2])
         assert self.aedtapp.modeler.colinear_heal("poly_2222", tolerance=0.25)
 
@@ -415,3 +448,44 @@ class TestClass:
             create_project_var=True,
         )
         pass
+
+    def test_34_create_additional_setup(self):
+        setup_name = "SiwaveDC"
+        setup = self.aedtapp.create_setup(setupname=setup_name, setuptype="SiwaveDC3DLayout")
+        assert setup_name == setup.name
+        setup_name = "SiwaveAC"
+        setup = self.aedtapp.create_setup(setupname=setup_name, setuptype="SiwaveAC3DLayout")
+        assert setup_name == setup.name
+        setup_name = "LNA"
+        setup = self.aedtapp.create_setup(setupname=setup_name, setuptype="LNA3DLayout")
+        assert setup_name == setup.name
+
+    @pytest.mark.skipif(os.name == "posix", reason="Bug on linux")
+    def test_35_set_differential_pairs(self):
+        assert self.hfss3dl.set_differential_pair(
+            positive_terminal="Port3",
+            negative_terminal="Port4",
+            common_name=None,
+            diff_name=None,
+            common_ref_z=34,
+            diff_ref_z=123,
+            active=True,
+            matched=False,
+        )
+        assert self.hfss3dl.set_differential_pair(positive_terminal="Port3", negative_terminal="Port5")
+
+    @pytest.mark.skipif(os.name == "posix", reason="Bug on linux")
+    def test_36_load_and_save_diff_pair_file(self):
+        diff_def_file = os.path.join(local_path, "example_models", "differential_pairs_definition.txt")
+        diff_file = self.local_scratch.copyfile(diff_def_file)
+        assert self.hfss3dl.load_diff_pairs_from_file(diff_file)
+
+        diff_file2 = os.path.join(self.local_scratch.path, "diff_file2.txt")
+        assert self.hfss3dl.save_diff_pairs_to_file(diff_file2)
+        with open(diff_file2, "r") as fh:
+            lines = fh.read().splitlines()
+        assert len(lines) == 3
+
+    @pytest.mark.skipif(is_ironpython, reason="Crash on Ironpython")
+    def test_37_import_edb(self):
+        assert self.aedtapp.import_edb(self.target_path)

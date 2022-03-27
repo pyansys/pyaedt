@@ -1,15 +1,17 @@
 # Configuration file for the Sphinx_PyAEDT documentation builder.
 
 # -- Project information -----------------------------------------------------
-import sys
+import datetime
 import os
 import pathlib
+import sys
 import warnings
 
 import pyvista
 import numpy as np
 import json
 from sphinx_gallery.sorting import FileNameSortKey
+from pyansys_sphinx_theme import pyansys_logo_black
 
 
 local_path = os.path.dirname(os.path.realpath(__file__))
@@ -20,7 +22,7 @@ sys.path.append(os.path.join(root_path))
 
 sys.path.append(os.path.join(root_path))
 project = "PyAEDT"
-copyright = "(c) 2021 ANSYS, Inc. All rights reserved"
+copyright = f"(c) {datetime.datetime.now().year} ANSYS, Inc. All rights reserved"
 author = "Ansys Inc."
 
 # Check for the local config file, otherwise use default desktop configuration
@@ -74,25 +76,21 @@ numpydoc_show_class_members = False
 numpydoc_xref_param_type = True
 numpydoc_validate = True
 numpydoc_validation_checks = {
-
     # general
     "GL06",  # Found unknown section
     "GL07",  # Sections are in the wrong order.
     "GL08",  # The object does not have a docstring
     "GL09",  # Deprecation warning should precede extended summary
     "GL10",  # reST directives {directives} must be followed by two colons
-
     # Summary
     "SS01",  # No summary found
     "SS02",  # Summary does not start with a capital letter
     "SS03",  # Summary does not end with a period
     "SS04",  # Summary contains heading whitespaces
     "SS05",  # Summary must start with infinitive verb, not third person
-
     # Parameters
     "PR10",  # Parameter "{param_name}" requires a space before the colon '
-             # separating the parameter name and type",
-
+    # separating the parameter name and type",
 }
 
 numpydoc_validation_exclude = {  # set of regex
@@ -209,14 +207,18 @@ if os.name != "posix" and "PYAEDT_CI_NO_EXAMPLES" not in os.environ:
         }
 
 # -- Options for HTML output -------------------------------------------------
+html_short_title = html_title = "PyAEDT"
 html_show_sourcelink = True
 html_theme = "pyansys_sphinx_theme"
-html_logo = "https://docs.pyansys.com/_static/pyansys-logo-black-cropped.png"
+html_logo = pyansys_logo_black
 
 html_theme_options = {
-    "github_url": "https://github.com/pyansys/PyAEDT",
+    "github_url": "https://github.com/pyansys/pyaedt",
     "show_prev_next": False,
-    "logo_link": "https://aedtdocs.pyansys.com/"  # navigate to the main page
+    "show_breadcrumbs": True,
+    "additional_breadcrumbs": [
+        ("PyAnsys", "https://docs.pyansys.com/"),
+    ],
 }
 
 html_static_path = ["_static"]

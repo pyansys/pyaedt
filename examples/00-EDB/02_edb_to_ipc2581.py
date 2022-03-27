@@ -1,6 +1,6 @@
 """
-IPC 2581 Exporter
------------------
+Edb: IPC 2581 Export
+--------------------
 This example shows how to use PyAEDT to Export an IPC2581 file.
 """
 # sphinx_gallery_thumbnail_path = 'Resources/ipc2581.png'
@@ -29,7 +29,7 @@ if os.path.exists(targetfolder):
     shutil.rmtree(targetfolder)
 shutil.copytree(example_path[:-8], targetfolder)
 targetfile = os.path.join(targetfolder)
-ipc2581_file = os.path.join(temp_folder, 'Galileo.xml')
+ipc2581_file = os.path.join(temp_folder, "Galileo.xml")
 
 print(targetfile)
 
@@ -38,16 +38,17 @@ print(targetfile)
 # Launch EDB
 # ~~~~~~~~~~
 # This example launches the :class:`pyaedt.Edb` class.
-# This example uses EDB 2021.2 and uses SI units.
+# This example uses EDB 2022R1 and uses SI units.
 
-edb = Edb(edbpath=targetfile, edbversion="2021.2")
+edb = Edb(edbpath=targetfile, edbversion="2022.1")
 
 
 ###############################################################################
 # Parametrize a Net
 
-edb.core_primitives.parametrize_trace_width("A0_N", parameter_name=generate_unique_name("Par"),
-                                            variable_value="0.4321mm")
+edb.core_primitives.parametrize_trace_width(
+    "A0_N", parameter_name=generate_unique_name("Par"), variable_value="0.4321mm"
+)
 
 ###############################################################################
 # Create IPC2581 File

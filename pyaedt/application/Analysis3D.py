@@ -2,15 +2,18 @@ import ntpath
 import os
 import warnings
 
-from pyaedt.generic.general_methods import aedt_exception_handler, _retry_ntimes, is_ironpython
+from pyaedt.application.Analysis import Analysis
+from pyaedt.generic.general_methods import _retry_ntimes
+from pyaedt.generic.general_methods import is_ironpython
+from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.modeler.Model3D import Modeler3D
 from pyaedt.modules.Mesh import Mesh
-from pyaedt.application.Analysis import Analysis
 
 if is_ironpython:
     from pyaedt.modules.PostProcessor import PostProcessor
 else:
     from pyaedt.modules.AdvancedPostProcessing import PostProcessor
+
 
 class FieldAnalysis3D(Analysis, object):
     """Manages 3D field analysis setup in HFSS, Maxwell 3D, and Q3D.
@@ -42,18 +45,17 @@ class FieldAnalysis3D(Analysis, object):
         Version of AEDT  to use. The default is ``None``, in which case
         the active version or latest installed version is used.
     non_graphical : bool, optional
-        Whether to run AEDT in the non-graphical mode. The default
+        Whether to run AEDT in non-graphical mode. The default
         is ``False``, in which case AEDT is launched in the graphical mode.
     new_desktop_session : bool, optional
         Whether to launch an instance of AEDT in a new thread, even if
         another instance of the ``specified_version`` is active on the
         machine. The default is ``True``.
     close_on_exit : bool, optional
-        Whether to release  AEDT on exit. The default is ``False``.
+        Whether to release AEDT on exit. The default is ``False``.
     student_version : bool, optional
         Whether to enable the student version of AEDT. The default
         is ``False``.
-
     """
 
     def __init__(
@@ -132,12 +134,12 @@ class FieldAnalysis3D(Analysis, object):
 
     @property
     def components3d(self):
-        """Components 3D.
+        """3D components.
 
         Returns
         -------
         dict
-            Dictionary of components with their absolute paths.
+            Dictionary of 3D components with their absolute paths.
 
         """
         components_dict = {}
@@ -165,7 +167,63 @@ class FieldAnalysis3D(Analysis, object):
                 components_dict[tail[:-8]] = el
         return components_dict
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
+    def plot(
+        self,
+        objects=None,
+        show=True,
+        export_path=None,
+        plot_as_separate_objects=True,
+        plot_air_objects=True,
+        force_opacity_value=None,
+        clean_files=False,
+    ):
+        """Plot the model or a subset of objects.
+
+        Parameters
+        ----------
+        objects : list, optional
+            List of objects to plot. The default is ``None``, in which case all objects
+            are exported.
+        show : bool, optional
+            Whether to show the plot after generation. The default is ``True``. If
+            ``False``, the generated class is returned for more customization before
+            plot generation.
+        export_path : str, optional
+            If available, an image is saved to file. If ``None`` no image will be saved.
+        plot_as_separate_objects : bool, optional
+            Whether to plot each object separately. The default is ``True``, which may
+            require more time to export from AEDT.
+        plot_air_objects : bool, optional
+            Whether to also plot air and vacuum objects. The default is ``True``.
+        force_opacity_value : float, optional
+            Opacity value between 0 and 1 to applied to all of the model. The
+            default is ``None``, which means the AEDT opacity is applied to each object.
+        clean_files : bool, optional
+            Whether to clean created files after plot generation. The default is ``False``,
+            which means that the cache is maintained in the model object that is returned.
+
+        Returns
+        -------
+        :class:`pyaedt.generic.plot.ModelPlotter`
+            Model Object.
+        """
+        if is_ironpython:
+            self.logger.warning("Plot is available only on CPython")
+        elif self._aedt_version < "2021.2":
+            self.logger.warning("Plot is supported from AEDT 2021 R2.")
+        else:
+            return self.post.plot_model_obj(
+                objects=objects,
+                show=show,
+                export_path=export_path,
+                plot_as_separate_objects=plot_as_separate_objects,
+                plot_air_objects=plot_air_objects,
+                force_opacity_value=force_opacity_value,
+                clean_files=clean_files,
+            )
+
+    @pyaedt_function_handler()
     def export_mesh_stats(self, setup_name, variation_string="", mesh_path=None):
         """Export mesh statistics to a file.
 
@@ -174,26 +232,26 @@ class FieldAnalysis3D(Analysis, object):
         setup_name :str
             Setup name.
         variation_string : str, optional
-            Variation List.
+            Variation list. The default is ``""``.
         mesh_path : str, optional
-            Full path to mesh statistics file.
+            Full path to the mesh statistics file. The default is ``None``, in which
+            caswe the working directory is used.
 
         Returns
         -------
         str
-            File Path.
+            File path.
 
         References
         ----------
-
         >>> oDesign.ExportMeshStats
         """
         if not mesh_path:
-            mesh_path = os.path.join(self.project_path, "meshstats.ms")
+            mesh_path = os.path.join(self.working_directory, "meshstats.ms")
         self.odesign.ExportMeshStats(setup_name, variation_string, mesh_path)
         return mesh_path
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_components3d_vars(self, component3dname):
         """Read the A3DCOMP file and check for variables.
 
@@ -240,7 +298,7 @@ class FieldAnalysis3D(Analysis, object):
                 vars[line_list[1]] = line_list[len(line_list) - 2]
         return vars
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_property_value(self, objectname, property, type=None):
         """Retrieve a property value.
 
@@ -249,7 +307,7 @@ class FieldAnalysis3D(Analysis, object):
         objectname : str
             Name of the object.
         property : str
-            Name of the property,
+            Name of the property.
         type : str, optional
             Type of the property. Options are ``"boundary"``, ``"excitation"``,
             ``"setup",`` and ``"mesh"``. The default is ``None``.
@@ -303,7 +361,7 @@ class FieldAnalysis3D(Analysis, object):
         return None
 
     # TODO Refactor this
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def copy_solid_bodies_from(self, design, object_list=None, no_vacuum=True, no_pec=True, include_sheets=False):
         """Copy a list of objects from one design to the active design.
 
@@ -330,15 +388,14 @@ class FieldAnalysis3D(Analysis, object):
 
         References
         ----------
-
         >>> oEditor.Copy
         >>> oEditor.Paste
         """
-        body_list = design.modeler.primitives.solid_names
+        body_list = design.modeler.solid_names
         if include_sheets:
-            body_list += design.modeler.primitives.sheet_names
+            body_list += design.modeler.sheet_names
         selection_list = []
-        material_properties = design.modeler.primitives.objects
+        material_properties = design.modeler.objects
         if object_list:
             selection_list = [i for i in object_list if i in body_list]
         else:
@@ -354,44 +411,22 @@ class FieldAnalysis3D(Analysis, object):
                     selection_list.append(body)
         design.modeler.oeditor.Copy(["NAME:Selections", "Selections:=", ",".join(selection_list)])
         self.modeler.oeditor.Paste()
-        self.modeler.primitives.refresh_all_ids()
+        self.modeler.refresh_all_ids()
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def export3DModel(self, fileName, filePath, fileFormat=".step", object_list=[], removed_objects=[]):
         """Export the 3D model.
 
         .. deprecated:: 0.5.0
            Use :func:`pyaedt.application.Analysis3D.modeler.export_3d_model` instead.
 
-        Parameters
-        ----------
-        fileName : str
-            Name of the file.
-        filePath : str
-            Path for the file.
-        fileFormat : str, optional
-             Format of the file. The default is ``".step"``.
-        object_list : list, optional
-             List of objects to export. The default is ``[]``.
-        removed_objects : list, optional
-             The default is ``[]``.
-
-        Returns
-        -------
-        bool
-            ``True`` when successful, ``False`` when failed.
-
-        References
-        ----------
-
-        >>> oEditor.Export
         """
         warnings.warn("`export3DModel` is deprecated. Use `export_3d_model` instead.", DeprecationWarning)
         return self.export_3d_model(fileName, filePath, fileFormat, object_list, removed_objects)
 
-    @aedt_exception_handler
-    def export_3d_model(self, fileName, filePath, fileFormat=".step", object_list=[], removed_objects=[]):
+    @pyaedt_function_handler()
+    def export_3d_model(self, fileName, filePath, fileFormat=".step", object_list=None, removed_objects=None):
         """Export the 3D model.
 
         Parameters
@@ -401,11 +436,11 @@ class FieldAnalysis3D(Analysis, object):
         filePath : str
             Path for the file.
         fileFormat : str, optional
-             Format of the file. The default is ``".step"``.
+            Format of the file. The default is ``".step"``.
         object_list : list, optional
-             List of objects to export. The default is ``[]``.
+            List of objects to export. The default is ``None``.
         removed_objects : list, optional
-             The default is ``[]``.
+            The default is ``None``.
 
         Returns
         -------
@@ -417,8 +452,14 @@ class FieldAnalysis3D(Analysis, object):
 
         >>> oEditor.Export
         """
+
+        if object_list == None:
+            object_list = []
+        if removed_objects == None:
+            removed_objects = []
+
         if not object_list:
-            allObjects = self.modeler.primitives.object_names
+            allObjects = self.modeler.object_names
             if removed_objects:
                 for rem in removed_objects:
                     allObjects.remove(rem)
@@ -428,8 +469,13 @@ class FieldAnalysis3D(Analysis, object):
         else:
             allObjects = object_list[:]
 
-        self.logger.info("Exporting {} objects".format(len(allObjects)))
-
+        self.logger.debug("Exporting {} objects".format(len(allObjects)))
+        major = -1
+        minor = -1
+        # actual version supported by AEDT is 29.0
+        if fileFormat in [".sm3", ".sat", ".sab"]:
+            major = 29
+            minor = 0
         stringa = ",".join(allObjects)
         arg = [
             "NAME:ExportParameters",
@@ -440,24 +486,24 @@ class FieldAnalysis3D(Analysis, object):
             "Selections:=",
             stringa,
             "File Name:=",
-            str(filePath) + "/" + str(fileName) + str(fileFormat),
+            os.path.join(filePath, fileName + fileFormat).replace("\\", "/"),
             "Major Version:=",
-            -1,
+            major,
             "Minor Version:=",
-            -1,
+            minor,
         ]
 
         self.modeler.oeditor.Export(arg)
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_all_sources(self):
         """Retrieve all setup sources.
 
         Returns
         -------
         list of str
-            List of setup sources.
+            List of all setup sources.
 
         References
         ----------
@@ -466,7 +512,7 @@ class FieldAnalysis3D(Analysis, object):
         """
         return list(self.osolution.GetAllSources())
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def set_source_context(self, sources, number_of_modes=1):
         """Set the source context.
 
@@ -475,7 +521,7 @@ class FieldAnalysis3D(Analysis, object):
         sources : list
             List of source names.
         number_of_modes : int, optional
-            Number of modes. The  default is ``1``.
+            Number of modes. The default is ``1``.
 
         Returns
         -------
@@ -494,7 +540,7 @@ class FieldAnalysis3D(Analysis, object):
         self.osolution.SetSourceContexts(contexts)
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def assign_material(self, obj, mat):
         """Assign a material to one or more objects.
 
@@ -503,7 +549,7 @@ class FieldAnalysis3D(Analysis, object):
         obj : str, list
             One or more objects to assign materials to.
         mat : str
-            Material to assign. If this material is not present, it will be
+            Material to assign. If this material is not present, it is
             created.
 
         Returns
@@ -524,10 +570,10 @@ class FieldAnalysis3D(Analysis, object):
 
         >>> from pyaedt import Hfss
         >>> hfss = Hfss()
-        >>> box1 = hfss.modeler.primitives.create_box([10, 10, 10], [4, 5, 5])
-        >>> box2 = hfss.modeler.primitives.create_box([0, 0, 0], [2, 3, 4])
-        >>> cylinder1 = hfss.modeler.primitives.create_cylinder(cs_axis="X", position=[5, 0, 0], radius=1, height=20)
-        >>> cylinder2 = hfss.modeler.primitives.create_cylinder(cs_axis="Z", position=[0, 0, 5], radius=1, height=10)
+        >>> box1 = hfss.modeler.create_box([10, 10, 10], [4, 5, 5])
+        >>> box2 = hfss.modeler.create_box([0, 0, 0], [2, 3, 4])
+        >>> cylinder1 = hfss.modeler.create_cylinder(cs_axis="X", position=[5, 0, 0], radius=1, height=20)
+        >>> cylinder2 = hfss.modeler.create_cylinder(cs_axis="Z", position=[0, 0, 5], radius=1, height=10)
 
         Assign the material ``"copper"`` to all the objects.
 
@@ -540,47 +586,29 @@ class FieldAnalysis3D(Analysis, object):
         >>> hfss.assign_material(obj_names_list, "aluminum")
         """
         mat = mat.lower()
-        selections = self.modeler.convert_to_selections(obj)
-        arg1 = ["NAME:Selections"]
-        arg1.append("Selections:="), arg1.append(selections)
-        arg2 = ["NAME:Attributes"]
-        arg2.append("MaterialValue:="), arg2.append(chr(34) + mat + chr(34))
-        if mat in self.materials.material_keys:
-            Mat = self.materials.material_keys[mat]
-            Mat.update()
-            if Mat.is_dielectric():
-                arg2.append("SolveInside:="), arg2.append(True)
-            else:
-                arg2.append("SolveInside:="), arg2.append(False)
-            self.modeler.oeditor.AssignMaterial(arg1, arg2)
-            self.logger.info("Assign Material " + mat + " to object " + selections)
-            if isinstance(obj, list):
-                for el in obj:
-                    self.modeler.primitives[el].material_name = mat
-            else:
-                self.modeler.primitives[obj].material_name = mat
-            return True
-        elif self.materials.checkifmaterialexists(mat):
-            self.materials._aedmattolibrary(mat)
-            Mat = self.materials.material_keys[mat]
-            if Mat.is_dielectric():
-                arg2.append("SolveInside:="), arg2.append(True)
-            else:
-                arg2.append("SolveInside:="), arg2.append(False)
-            self.modeler.oeditor.AssignMaterial(arg1, arg2)
-            self.logger.info("Assign Material " + mat + " to object " + selections)
-            if isinstance(obj, list):
-                for el in obj:
-                    self.modeler.primitives[el].material_name = mat
-            else:
-                self.modeler.primitives[obj].material_name = mat
+        selections = self.modeler.convert_to_selections(obj, True)
 
+        mat_exists = False
+        if mat in self.materials.material_keys:
+            mat_exists = True
+        if mat_exists or self.materials.checkifmaterialexists(mat):
+            Mat = self.materials.material_keys[mat]
+            if mat_exists:
+                Mat.update()
+            self.logger.info("Assign Material " + mat + " to object " + str(selections))
+            for el in selections:
+                self.modeler[el].material_name = mat
+                self.modeler[el].color = self.materials.material_keys[mat].material_appearance
+                if Mat.is_dielectric():
+                    self.modeler[el].solve_inside = True
+                else:
+                    self.modeler[el].solve_inside = False
             return True
         else:
             self.logger.error("Material does not exist.")
             return False
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_all_conductors_names(self):
         """Retrieve all conductors in the active design.
 
@@ -601,7 +629,7 @@ class FieldAnalysis3D(Analysis, object):
             obj_names += list(self._modeler.oeditor.GetObjectsByMaterial(el))
         return obj_names
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_all_dielectrics_names(self):
         """Retrieve all dielectrics in the active design.
 
@@ -612,7 +640,6 @@ class FieldAnalysis3D(Analysis, object):
 
         References
         ----------
-
         >>> oEditor.GetObjectsByMaterial
         """
         diel = self.materials.dielectrics

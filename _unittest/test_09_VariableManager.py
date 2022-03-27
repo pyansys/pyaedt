@@ -1,16 +1,14 @@
 # Setup paths for module imports
-from __future__ import division
-import gc
+from __future__ import division  # noreorder
 import math
 
-from pyaedt.application.Variables import Variable
+from _unittest.conftest import BasisTest
 from pyaedt.application.Variables import decompose_variable_value
-from pyaedt.generic.filesystem import Scratch
+from pyaedt.application.Variables import Variable
 from pyaedt.generic.general_methods import isclose
-from pyaedt.hfss import Hfss
+from pyaedt.modeler.GeometryOperators import GeometryOperators
 
 # Import required modules
-from _unittest.conftest import scratch_path
 
 try:
     import pytest  # noqa: F401
@@ -18,19 +16,13 @@ except ImportError:
     import _unittest_ironpython.conf_unittest as pytest  # noqa: F401
 
 
-class TestClass:
+class TestClass(BasisTest, object):
     def setup_class(self):
-
-        with Scratch(scratch_path) as self.local_scratch:
-            self.aedtapp = Hfss()
-            self._close_on_completion = True
+        BasisTest.my_setup(self)
+        self.aedtapp = BasisTest.add_app(self, "Test_09")
 
     def teardown_class(self):
-        self.aedtapp._desktop.ClearMessages("", "", 3)
-        if self._close_on_completion:
-            assert self.aedtapp.close_project(saveproject=False)
-            self.local_scratch.remove()
-            gc.collect()
+        BasisTest.my_teardown(self)
 
     def test_01_set_globals(self):
         var = self.aedtapp.variable_manager
@@ -339,8 +331,16 @@ class TestClass:
         assert decompose_variable_value("3.123456m") == (3.123456, "m")
         assert decompose_variable_value("3m") == (3, "m")
         assert decompose_variable_value("3") == (3, "")
-        assert decompose_variable_value("3.") == (3., "")
+        assert decompose_variable_value("3.") == (3.0, "")
         assert decompose_variable_value("3.123456m2") == (3.123456, "m2")
         assert decompose_variable_value("3.123456Nm-2") == (3.123456, "Nm-2")
         assert decompose_variable_value("3.123456kg2m2") == (3.123456, "kg2m2")
         assert decompose_variable_value("3.123456kgm2") == (3.123456, "kgm2")
+
+    def test_13_postprocessing(self):
+        v1 = self.aedtapp.variable_manager.set_variable("test_post1", 10, postprocessing=True)
+        assert v1
+        assert not self.aedtapp.variable_manager.set_variable("test2", "v1+1")
+        assert self.aedtapp.variable_manager.set_variable("test2", "test_post1+1", postprocessing=True)
+        x1 = GeometryOperators.parse_dim_arg(self.aedtapp["test2"], variable_manager=self.aedtapp.variable_manager)
+        assert x1 == 11

@@ -1,8 +1,11 @@
 import csv
+import os
 import re
 
-from pyaedt.generic.general_methods import aedt_exception_handler, generate_unique_name, is_ironpython
 from pyaedt.application.Analysis import Analysis
+from pyaedt.generic.general_methods import generate_unique_name
+from pyaedt.generic.general_methods import is_ironpython
+from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.modeler.Model3D import Modeler3D
 from pyaedt.modules.MeshIcepak import IcepakMesh
 
@@ -131,12 +134,59 @@ class FieldAnalysisIcepak(Analysis, object):
         """
         return self._mesh
 
-    # @property
-    # @aedt_exception_handler
-    # def post(self):
-    #     return self._post
+    @pyaedt_function_handler()
+    def plot(
+        self,
+        objects=None,
+        show=True,
+        export_path=None,
+        plot_as_separate_objects=True,
+        plot_air_objects=True,
+        force_opacity_value=None,
+        clean_files=False,
+    ):
+        """Plot the model or a substet of objects.
 
-    @aedt_exception_handler
+        Parameters
+        ----------
+        objects : list, optional
+            Optional list of objects to plot. If `None` all objects will be exported.
+        show : bool, optional
+            Show the plot after generation or simply return the
+            generated Class for more customization before plot.
+        export_path : str, optional
+            If available, an image is saved to file. If `None` no image will be saved.
+        plot_as_separate_objects : bool, optional
+            Plot each object separately. It may require more time to export from AEDT.
+        plot_air_objects : bool, optional
+            Plot also air and vacuum objects.
+        force_opacity_value : float, optional
+            Opacity value between 0 and 1 to be applied to all model.
+            If `None` aedt opacity will be applied to each object.
+        clean_files : bool, optional
+            Clean created files after plot. Cache is mainteined into the model object returned.
+
+        Returns
+        -------
+        :class:`pyaedt.generic.plot.ModelPlotter`
+            Model Object.
+        """
+        if is_ironpython:
+            self.logger.warning("Plot is available only on CPython")
+        elif self._aedt_version < "2021.2":
+            self.logger.warning("Plot is supported from AEDT 2021 R2.")
+        else:
+            return self.post.plot_model_obj(
+                objects=objects,
+                show=show,
+                export_path=export_path,
+                plot_as_separate_objects=plot_as_separate_objects,
+                plot_air_objects=plot_air_objects,
+                force_opacity_value=force_opacity_value,
+                clean_files=clean_files,
+            )
+
+    @pyaedt_function_handler()
     def apply_icepak_settings(
         self,
         ambienttemp=20,
@@ -214,7 +264,7 @@ class FieldAnalysisIcepak(Analysis, object):
         )
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def export_3d_model(self, fileName, filePath, fileFormat=".step", object_list=[], removed_objects=[]):
         """Export the 3D model.
 
@@ -242,7 +292,7 @@ class FieldAnalysisIcepak(Analysis, object):
         >>> oEditor.Export
         """
         if not object_list:
-            allObjects = self.modeler.primitives.object_names
+            allObjects = self.modeler.object_names
             if removed_objects:
                 for rem in removed_objects:
                     allObjects.remove(rem)
@@ -253,7 +303,12 @@ class FieldAnalysisIcepak(Analysis, object):
             allObjects = object_list[:]
 
         self.logger.info("Exporting {} objects".format(len(allObjects)))
-
+        major = -1
+        minor = -1
+        # actual version supported by AEDT is 29.0
+        if fileFormat in [".step", ".stp", ".sm3", ".sat", ".sab"]:
+            major = 29
+            minor = 0
         stringa = ",".join(allObjects)
         arg = [
             "NAME:ExportParameters",
@@ -264,17 +319,17 @@ class FieldAnalysisIcepak(Analysis, object):
             "Selections:=",
             stringa,
             "File Name:=",
-            str(filePath) + "/" + str(fileName) + str(fileFormat),
+            os.path.join(filePath, fileName + fileFormat),
             "Major Version:=",
-            -1,
+            major,
             "Minor Version:=",
-            -1,
+            minor,
         ]
 
         self.modeler.oeditor.Export(arg)
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_property_value(self, objectname, property, type=None):
         """Retrieve a design property value for an object.
 
@@ -343,7 +398,7 @@ class FieldAnalysisIcepak(Analysis, object):
                     return val
         return None
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def copy_solid_bodies_from(self, design, object_list=None, no_vacuum=True, no_pec=True):
         """Copy a list of objects from one design to the active design.
 
@@ -373,7 +428,7 @@ class FieldAnalysisIcepak(Analysis, object):
         """
         body_list = design.modeler.solid_bodies
         selection_list = []
-        material_properties = design.modeler.primitives.objects
+        material_properties = design.modeler.objects
         for body in body_list:
             include_object = True
             if object_list:
@@ -391,7 +446,7 @@ class FieldAnalysisIcepak(Analysis, object):
         self.modeler.oeditor.Paste()
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def assign_material(self, obj, mat):
         """Assign a material to one or more objects.
 
@@ -414,40 +469,29 @@ class FieldAnalysisIcepak(Analysis, object):
         >>> oEditor.AssignMaterial
         """
         mat = mat.lower()
-        selections = self.modeler.convert_to_selections(obj)
-        arg1 = ["NAME:Selections"]
-        arg1.append("Selections:="), arg1.append(selections)
-        arg2 = ["NAME:Attributes"]
-        arg2.append("MaterialValue:="), arg2.append(chr(34) + mat + chr(34))
+        selections = self.modeler.convert_to_selections(obj, True)
+
+        mat_exists = False
         if mat in self.materials.material_keys:
+            mat_exists = True
+        if mat_exists or self.materials.checkifmaterialexists(mat):
             Mat = self.materials.material_keys[mat]
-            Mat.update()
-            if Mat.is_dielectric():
-                arg2.append("SolveInside:="), arg2.append(True)
-            else:
-                arg2.append("SolveInside:="), arg2.append(False)
-            self.modeler.oeditor.AssignMaterial(arg1, arg2)
-            self.logger.info("Assign Material " + mat + " to object " + selections)
-            self.materials._aedmattolibrary(mat)
-            for el in obj:
-                self.modeler.primitives[el].material_name = mat
-            return True
-        elif self.materials.checkifmaterialexists(mat):
-            Mat = self.materials.material_keys[mat]
-            if Mat.is_dielectric():
-                arg2.append("SolveInside:="), arg2.append(True)
-            else:
-                arg2.append("SolveInside:="), arg2.append(False)
-            self.modeler.oeditor.AssignMaterial(arg1, arg2)
-            self.logger.info("Assign Material " + mat + " to object " + selections)
-            for el in obj:
-                self.modeler.primitives[el].material_name = mat
+            if mat_exists:
+                Mat.update()
+            self.logger.info("Assign Material " + mat + " to object " + str(selections))
+            for el in selections:
+                self.modeler[el].material_name = mat
+                self.modeler[el].color = self.materials.material_keys[mat].material_appearance
+                if Mat.is_dielectric():
+                    self.modeler[el].solve_inside = True
+                else:
+                    self.modeler[el].solve_inside = False
             return True
         else:
             self.logger.error("Material does not exist.")
             return False
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def assign_surface_material(self, obj, mat):
         """Assign a surface material to one or more objects.
 
@@ -470,9 +514,7 @@ class FieldAnalysisIcepak(Analysis, object):
         """
         mat = mat.lower()
         if mat not in self.materials.surface_material_keys:
-            self.logger.warning(
-                "Warning. The material is not the database. Use add_surface_material."
-            )
+            self.logger.warning("Warning. The material is not the database. Use add_surface_material.")
             return False
         else:
             for el in obj:
@@ -481,23 +523,15 @@ class FieldAnalysisIcepak(Analysis, object):
                         "NAME:AllTabs",
                         [
                             "NAME:Geometry3DAttributeTab",
-                            [
-                                "NAME:PropServers",
-                                el
-                            ],
-                            [
-                                "NAME:ChangedProps",
-                                [
-                                    "NAME:Surface Material",
-                                    "Value:=", "\"" + mat + "\""
-                                ]
-                            ]
-                        ]
-                    ])
+                            ["NAME:PropServers", el],
+                            ["NAME:ChangedProps", ["NAME:Surface Material", "Value:=", '"' + mat + '"']],
+                        ],
+                    ]
+                )
 
             return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _assign_property_to_mat(self, newmat, val, property):
         """Assign a property to a new material.
 
@@ -541,7 +575,7 @@ class FieldAnalysisIcepak(Analysis, object):
         except:
             return False
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _create_dataset_from_sherlock(self, material_name, material_string, property_name="Mass_Density"):
         mats = material_string.split(",")
         mat_temp = [[i.split("@")[0], i.split("@")[1]] for i in mats]
@@ -555,7 +589,7 @@ class FieldAnalysisIcepak(Analysis, object):
         )
         return nominal_val, "$" + ds_name
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def assignmaterial_from_sherlock_files(self, csv_component, csv_material):
         """Assign material to objects in a design based on a CSV file obtained from Sherlock.
 
@@ -595,7 +629,7 @@ class FieldAnalysisIcepak(Analysis, object):
             for el in component_header:
                 component_data[el] = [i[k] for i in data]
                 k += 1
-        all_objs = self.modeler.primitives.object_names
+        all_objs = self.modeler.object_names
         i = 0
         for mat in material_data["Name"]:
             list_mat_obj = [
@@ -664,13 +698,13 @@ class FieldAnalysisIcepak(Analysis, object):
                 self.assign_material(list_mat_obj, mat)
 
                 for obj_name in list_mat_obj:
-                    if not self.modeler.primitives[obj_name].surface_material_name:
-                        self.modeler.primitives[obj_name].surface_material_name = "Steel-oxidised-surface"
+                    if not self.modeler[obj_name].surface_material_name:
+                        self.modeler[obj_name].surface_material_name = "Steel-oxidised-surface"
             i += 1
             all_objs = [ao for ao in all_objs if ao not in list_mat_obj]
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_all_conductors_names(self):
         """Retrieve all conductors in the active design.
 
@@ -681,12 +715,12 @@ class FieldAnalysisIcepak(Analysis, object):
         """
         cond = [i.lower() for i in list(self.materials.conductors)]
         obj_names = []
-        for el, obj in self.modeler.primitives.objects.items():
+        for el, obj in self.modeler.objects.items():
             if obj.material_name in cond:
                 obj_names.append(obj.name)
         return obj_names
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_all_dielectrics_names(self):
         """Retrieve all dielectrics in the active design.
 
@@ -698,7 +732,7 @@ class FieldAnalysisIcepak(Analysis, object):
         """
         diel = [i.lower() for i in list(self.materials.dielectrics)]
         obj_names = []
-        for el, obj in self.modeler.primitives.objects.items():
+        for el, obj in self.modeler.objects.items():
             if obj.material_name in diel:
                 obj_names.append(obj.name)
         return obj_names

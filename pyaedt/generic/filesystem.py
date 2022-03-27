@@ -1,9 +1,10 @@
 import os
-import shutil
-from distutils.dir_util import copy_tree
 import random
+import shutil
 import string
 from glob import glob
+
+from distutils.dir_util import copy_tree
 
 
 def my_location():
@@ -91,7 +92,7 @@ class Scratch:
             dst_file = os.path.join(self.path, dst_filename)
         else:
             dst_file = os.path.join(self.path, os.path.basename(src_file))
-        shutil.copyfile(src_file, dst_file)
+        shutil.copy2(src_file, dst_file)
         return dst_file
 
     def copyfolder(self, src_folder, destfolder):
@@ -117,6 +118,7 @@ class Scratch:
     def __exit__(self, ex_type, ex_value, ex_traceback):
         if ex_type or self._volatile:
             self.remove()
+
 
 def get_json_files(start_folder):
     """

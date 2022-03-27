@@ -1,14 +1,13 @@
 # standard imports
-import gc
 import os
 
-# Import required modules
-from pyaedt import Hfss, Icepak
-from pyaedt.generic.filesystem import Scratch
-from pyaedt.modules.Material import MatProperties, SurfMatProperties
-
-# Setup paths for module imports
-from _unittest.conftest import desktop_version, local_path, scratch_path
+from _unittest.conftest import BasisTest
+from _unittest.conftest import desktop_version
+from _unittest.conftest import local_path
+from pyaedt import Icepak
+from pyaedt import Maxwell3d
+from pyaedt.modules.Material import MatProperties
+from pyaedt.modules.Material import SurfMatProperties
 
 try:
     import pytest  # noqa: F401
@@ -16,16 +15,13 @@ except ImportError:
     import _unittest_ironpython.conf_unittest as pytest  # noqa: F401
 
 
-class TestClass:
+class TestClass(BasisTest, object):
     def setup_class(self):
-        with Scratch(scratch_path) as self.local_scratch:
-            self.aedtapp = Hfss(specified_version=desktop_version)
+        BasisTest.my_setup(self)
+        self.aedtapp = BasisTest.add_app(self, project_name="Test03")
 
     def teardown_class(self):
-        self.messages = self.aedtapp._desktop.ClearMessages("", "", 3)
-        assert self.aedtapp.close_project(self.aedtapp.project_name, False)
-        self.local_scratch.remove()
-        gc.collect()
+        BasisTest.my_teardown(self)
 
     def test_01_vaacum(self):
         assert "vacuum" in list(self.aedtapp.materials.material_keys.keys())
@@ -56,18 +52,12 @@ class TestClass:
         assert mat1.diffusivity.value == MatProperties.get_defaultvalue(aedtname="diffusivity")
 
         assert "Electromagnetic" in mat1.physics_type
-        mat1.core_loss_kc.value = MatProperties.get_defaultvalue(aedtname="core_loss_kc")
-        mat1.core_loss_kh.value = MatProperties.get_defaultvalue(aedtname="core_loss_kh")
-        mat1.core_loss_ke.value = MatProperties.get_defaultvalue(aedtname="core_loss_ke")
         mat1.molecular_mass.value = MatProperties.get_defaultvalue(aedtname="molecular_mass")
         mat1.specific_heat.value = MatProperties.get_defaultvalue(aedtname="specific_heat")
         mat1.thermal_expansion_coefficient.value = MatProperties.get_defaultvalue(
             aedtname="thermal_expansion_coefficient"
         )
 
-        assert mat1.core_loss_kc.value == MatProperties.get_defaultvalue(aedtname="core_loss_kc")
-        assert mat1.core_loss_kh.value == MatProperties.get_defaultvalue(aedtname="core_loss_kh")
-        assert mat1.core_loss_ke.value == MatProperties.get_defaultvalue(aedtname="core_loss_ke")
         assert mat1.coordinate_system == "Cartesian"
         assert mat1.name == "new_copper2"
         assert mat1.molecular_mass.value == MatProperties.get_defaultvalue(aedtname="molecular_mass")
@@ -78,7 +68,19 @@ class TestClass:
         assert self.aedtapp.change_validation_settings()
         assert self.aedtapp.change_validation_settings(ignore_unclassified=True, skip_intersections=True)
 
-        assert mat1.material_appearance == [128, 128, 128]
+        assert mat1.set_magnetic_coercitivity(1, 2, 3, 4)
+        assert mat1.get_magnetic_coercitivity() == ("1A_per_meter", "2", "3", "4")
+        assert mat1.set_electrical_steel_coreloss(1, 2, 3, 4, 0.002)
+        assert mat1.get_curve_coreloss_type() == "Electrical Steel"
+        assert mat1.get_curve_coreloss_values()["core_loss_equiv_cut_depth"] == "0.002meter"
+        assert mat1.set_hysteresis_coreloss(1, 2, 3, 4, 0.002)
+        assert mat1.get_curve_coreloss_type() == "Hysteresis Model"
+        assert mat1.set_bp_curve_coreloss([[0, 0], [10, 10], [20, 20]])
+        assert mat1.get_curve_coreloss_type() == "B-P Curve"
+        assert mat1.set_power_ferrite_coreloss()
+        assert mat1.get_curve_coreloss_type() == "Power Ferrite"
+        assert isinstance(mat1.material_appearance, list)
+
         mat1.material_appearance = [11, 22, 0]
         assert mat1.material_appearance == [11, 22, 0]
         mat1.material_appearance = ["11", "22", "10"]
@@ -116,7 +118,7 @@ class TestClass:
         assert not self.aedtapp.materials.remove_material("copper4")
 
     def test_06_surface_material(self):
-        ipk = Icepak()
+        ipk = Icepak(specified_version=desktop_version)
         mat2 = ipk.materials.add_surface_material("Steel")
         mat2.emissivity.value = SurfMatProperties.get_defaultvalue(aedtname="surface_emissivity")
         mat2.surface_diffuse_absorptance.value = SurfMatProperties.get_defaultvalue(
@@ -146,6 +148,27 @@ class TestClass:
         assert "al-extruded1" in self.aedtapp.materials.material_keys.keys()
         assert self.aedtapp.materials["al-extruded1"].thermal_conductivity.thermalmodifier
 
-    def test_09_add_material_sweep(self):
-        assert self.aedtapp.materials.add_material_sweep(["copper3", "new_copper"], "sweep_copper")
+    def test_09_non_linear_materials(self):
+        app = Maxwell3d(specified_version=desktop_version)
+        mat1 = app.materials.add_material("myMat")
+        assert mat1.permeability.set_non_linear([[0, 0], [1, 12], [10, 30]])
+        assert mat1.permittivity.set_non_linear([[0, 0], [2, 12], [10, 30]])
+        assert mat1.conductivity.set_non_linear([[0, 0], [3, 12], [10, 30]])
+        app.materials.export_materials_to_file(os.path.join(self.local_scratch.path, "non_linear.json"))
+        os.path.exists(os.path.join(self.local_scratch.path, "non_linear.json"))
+        app.materials.remove_material("myMat")
+        app.materials.import_materials_from_file(os.path.join(self.local_scratch.path, "non_linear.json"))
+        assert app.materials["myMat"].permeability.value == [[0, 0], [1, 12], [10, 30]]
+        assert app.materials["myMat"].permittivity.value == [[0, 0], [2, 12], [10, 30]]
+        assert app.materials["myMat"].conductivity.value == [[0, 0], [3, 12], [10, 30]]
+        assert app.materials["myMat"].permeability.type == "nonlinear"
+        assert app.materials["myMat"].conductivity.type == "nonlinear"
+        assert app.materials["myMat"].permittivity.type == "nonlinear"
+        assert app.materials["myMat"].permeability.bunit == "tesla"
+        mat2 = app.materials.add_material("myMat2")
+        assert mat2.permeability.set_non_linear([[0, 0], [1, 12], [10, 30]])
+        assert app.modeler.create_box([0, 0, 0], [10, 10, 10], matname="myMat2")
+
+    def test_10_add_material_sweep(self):
+        assert self.aedtapp.materials.add_material_sweep(["copper", "aluminum"], "sweep_copper")
         assert "sweep_copper" in list(self.aedtapp.materials.material_keys.keys())

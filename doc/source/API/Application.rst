@@ -1,8 +1,9 @@
 AEDT Applications
 =================
-The PyAEDT API includes these classes for applications and modules.
-The application has to be initialized by the user. All other classes and methods are inherited into application class.
-Desktop application is implicitly launched in any of the other applications.
+The PyAEDT API includes classes for applications and modules. You must initialize the 
+application case. All other classes and methods are inherited into the application class.
+The desktop application is implicitly launched in any of the other applications.
+
 Example with Desktop:
 
 .. code:: python
@@ -36,7 +37,6 @@ Example without Desktop:
 
 .. autosummary::
    :toctree: _autosummary
-   :template: custom-class-template.rst
 
    Desktop
    Hfss
@@ -50,12 +50,12 @@ Example without Desktop:
    Mechanical
    Rmxprt
    Circuit
-   Simplorer
    Emit
+   TwinBuilder
 
 
 Inheritance Diagram
 ~~~~~~~~~~~~~~~~~~~
 
-.. inheritance-diagram:: pyaedt.hfss pyaedt.q3d pyaedt.icepak pyaedt.circuit pyaedt.edb pyaedt.hfss3dlayout  pyaedt.maxwell pyaedt.mechanical pyaedt.simplorer pyaedt.rmxprt
+.. inheritance-diagram:: pyaedt.hfss pyaedt.q3d pyaedt.icepak pyaedt.circuit pyaedt.edb pyaedt.hfss3dlayout  pyaedt.maxwell pyaedt.mechanical pyaedt.twinbuilder pyaedt.rmxprt
     :parts: 1

@@ -1,4 +1,5 @@
-from pyaedt.generic.general_methods import aedt_exception_handler, is_number
+from pyaedt.generic.general_methods import is_number
+from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.modeler.Primitives import Primitives
 
 
@@ -6,7 +7,7 @@ class Primitives2D(Primitives, object):
     """Manages primitives in 2D tools.
 
     This class is inherited in the caller application and is accessible through the primitives variable part
-    of the modeler object (for example, ``hfss.modeler.primitives`` or ``icepak.modeler.primitives``).
+    of the modeler object (for example, ``hfss.modeler`` or ``icepak.modeler``).
 
 
     Examples
@@ -15,7 +16,7 @@ class Primitives2D(Primitives, object):
 
     >>> from pyaedt import Q2d
     >>> aedtapp = Q2d()
-    >>> prim = aedtapp.modeler.primitives
+    >>> prim = aedtapp.modeler
     """
 
     @property
@@ -27,10 +28,10 @@ class Primitives2D(Primitives, object):
                 plane = "Y"
         return plane
 
-    def __init__(self, modeler):
-        Primitives.__init__(self, modeler)
+    def __init__(self):
+        Primitives.__init__(self)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_circle(self, position, radius, num_sides=0, is_covered=True, name=None, matname=None):
         """Create a circle.
 
@@ -63,9 +64,9 @@ class Primitives2D(Primitives, object):
 
         Examples
         --------
-        >>> circle1 = aedtapp.modeler.primitives.create_circle([0, -2, -2], 3)
-        >>> circle2 = aedtapp.modeler.primitives.create_circle(position=[0, -2, -2], radius=3, num_sides=6,
-        ...                                                     name="MyCircle", matname="Copper")
+        >>> circle1 = aedtapp.modeler.create_circle([0, -2, -2], 3)
+        >>> circle2 = aedtapp.modeler.create_circle(position=[0, -2, -2], radius=3, num_sides=6,
+        ...                                         name="MyCircle", matname="Copper")
 
 
         """
@@ -86,7 +87,7 @@ class Primitives2D(Primitives, object):
         new_object_name = self._oeditor.CreateCircle(vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_ellipse(self, position, major_radius, ratio, is_covered=True, name=None, matname=None):
         """Create an ellipse.
 
@@ -119,9 +120,9 @@ class Primitives2D(Primitives, object):
 
         Examples
         --------
-        >>> ellipse1 = aedtapp.modeler.primitives.create_ellipse([0, -2, -2], 4.0, 0.2)
-        >>> ellipse2 = aedtapp.modeler.primitives.create_ellipse(position=[0, -2, -2], major_radius=4.0, ratio=0.2,
-        ...                                                     name="MyEllipse", matname="Copper")
+        >>> ellipse1 = aedtapp.modeler.create_ellipse([0, -2, -2], 4.0, 0.2)
+        >>> ellipse2 = aedtapp.modeler.create_ellipse(position=[0, -2, -2], major_radius=4.0, ratio=0.2,
+        ...                                           name="MyEllipse", matname="Copper")
         """
         szAxis = self.plane2d
         XStart, YStart, ZStart = self._pos_with_arg(position)
@@ -139,7 +140,7 @@ class Primitives2D(Primitives, object):
         new_object_name = self._oeditor.CreateEllipse(vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_rectangle(self, position, dimension_list, is_covered=True, name=None, matname=None):
         """Create a rectangle.
 
@@ -170,9 +171,9 @@ class Primitives2D(Primitives, object):
         Examples
         --------
 
-        >>> rect1 = aedtapp.modeler.primitives.create_rectangle([0, -2, -2], [3, 4])
-        >>> rect2 = aedtapp.modeler.primitives.create_rectangle(position=[0, -2, -2], dimension_list=[3, 4],
-        ...                                                     name="MyCircle", matname="Copper")
+        >>> rect1 = aedtapp.modeler.create_rectangle([0, -2, -2], [3, 4])
+        >>> rect2 = aedtapp.modeler.create_rectangle(position=[0, -2, -2], dimension_list=[3, 4],
+        ...                                          name="MyCircle", matname="Copper")
 
         """
         axis = self.plane2d
@@ -193,7 +194,7 @@ class Primitives2D(Primitives, object):
         new_object_name = self._oeditor.CreateRectangle(vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_regular_polygon(self, position, start_point, num_sides=6, is_covered=True, name=None, matname=None):
         """Create a rectangle.
 
@@ -226,9 +227,9 @@ class Primitives2D(Primitives, object):
         Examples
         --------
 
-        >>> pg1 = aedtapp.modeler.primitives.create_regular_polygon([0, 0, 0], [0, 2, 0])
-        >>> pg2 = aedtapp.modeler.primitives.create_regular_polygon(position=[0, 0, 0], start_point=[0, 2, 0],
-        ...                                                     name="MyPolygon", matname="Copper")
+        >>> pg1 = aedtapp.modeler.create_regular_polygon([0, 0, 0], [0, 2, 0])
+        >>> pg2 = aedtapp.modeler.create_regular_polygon(position=[0, 0, 0], start_point=[0, 2, 0],
+        ...                                              name="MyPolygon", matname="Copper")
 
         """
         x_center, y_center, z_center = self._pos_with_arg(position)
@@ -252,7 +253,7 @@ class Primitives2D(Primitives, object):
         new_object_name = self._oeditor.CreateRegularPolygon(vArg1, vArg2)
         return self._create_object(new_object_name)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_region(self, pad_percent=300):
         """Create an air region.
 
@@ -260,7 +261,8 @@ class Primitives2D(Primitives, object):
         ----------
         pad_percent : float or list of float, default=300
             If float, use padding in per-cent for all dimensions
-            If list, then interpret as adding for  ``["+X", "+Y", "-X", "-Y"]``.
+            If list, then interpret as adding for  ``["+X", "+Y", "-X", "-Y"]`` or
+            ``["+R", "+Z", "-R", "-Z"]`` depending if the solution is XY or RZ.
 
         Returns
         -------
@@ -272,9 +274,17 @@ class Primitives2D(Primitives, object):
         >>> oEditor.CreateRegion
 
         """
-        # TODO handle RZ!!
         if is_number(pad_percent):
-            pad_percent = [pad_percent, pad_percent, 0, pad_percent, pad_percent, 0]
+            if self._app.xy_plane:
+                pad_percent = [pad_percent, pad_percent, 0, pad_percent, pad_percent, 0]
+            else:
+                pad_percent = [pad_percent, 0, pad_percent, pad_percent, 0, pad_percent]
+
         else:
-            pad_percent = [pad_percent[0], pad_percent[1], 0, pad_percent[2], pad_percent[3], 0]
+            if self._app.xy_plane:
+                pad_percent = [pad_percent[0], pad_percent[1], 0, pad_percent[2], pad_percent[3], 0]
+
+            else:
+                pad_percent = [pad_percent[0], 0, pad_percent[1], pad_percent[2], 0, pad_percent[3]]
+
         return Primitives.create_region(self, pad_percent)

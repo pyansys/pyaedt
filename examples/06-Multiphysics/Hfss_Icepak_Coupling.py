@@ -1,6 +1,6 @@
 """
-HFSS-Icepack Coupling Analysis
-------------------------------
+Multiphisics: HFSS-Icepack Multyphisics Analysis
+------------------------------------------------
 This example shows how to create a full project from scratch in HFSS and Icepak (linked to HFSS).
 The project creates a setup, solves it, and creates post-processing output. It includes several
 commands to show PyAEDT's capabilities.
@@ -38,17 +38,15 @@ print(project_dir)
 
 from pyaedt import Hfss
 from pyaedt import Icepak
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 ###############################################################################
 # Launch AEDT
 # ~~~~~~~~~~~
-# This example launches AEDT 2021.2 in graphical mode.
+# This example launches AEDT 2022R1 in graphical mode.
 # This example uses SI units.
 
-desktopVersion = "2021.2"
+desktopVersion = "2022.1"
 
 ###############################################################################
 # Launch AEDT in Non-Graphical Mode
@@ -56,7 +54,7 @@ desktopVersion = "2021.2"
 # You can change the Boolean parameter ``NonGraphical`` to ``False`` to launch
 # AEDT in graphical mode.
 
-NonGraphical = False
+NonGraphical = True
 NewThread = True
 project_name = "HFSS_Icepak_Coupling"
 project_file = os.path.join(project_dir, project_name + ".aedt")
@@ -71,9 +69,9 @@ project_file = os.path.join(project_dir, project_name + ".aedt")
 aedtapp = Hfss(specified_version=desktopVersion, non_graphical=NonGraphical, new_desktop_session=NewThread)
 
 ###############################################################################
-# Intitialize Variable Settings
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# A variable can be initialized simpy by creating it as a list object.
+# Initialize Variable Settings
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# A variable can be initialized simply by creating it as a list object.
 # If you enter the prefix ``$``, the variable is created for the project.
 # Otherwise, the variable is created for the design.
 
@@ -90,15 +88,20 @@ aedtapp["inner"] = "3mm"
 # Alternatively, the material can be assigned using the :func:`assign_material` function.
 
 # TODO: How does this work when two truesurfaces are defined?
-o1 = aedtapp.modeler.primitives.create_cylinder(
-    aedtapp.PLANE.XY, udp, "inner", "$coax_dimension", numSides=0, name="inner"
-)
-o2 = aedtapp.modeler.primitives.create_cylinder(
-    aedtapp.PLANE.XY, udp, 8, "$coax_dimension", numSides=0, matname="teflon_based"
-)
-o3 = aedtapp.modeler.primitives.create_cylinder(
-    aedtapp.PLANE.XY, udp, 10, "$coax_dimension", numSides=0, name="outer"
-)
+o1 = aedtapp.modeler.create_cylinder(aedtapp.PLANE.ZX, udp, "inner", "$coax_dimension", numSides=0, name="inner")
+o2 = aedtapp.modeler.create_cylinder(aedtapp.PLANE.ZX, udp, 8, "$coax_dimension", numSides=0, matname="teflon_based")
+o3 = aedtapp.modeler.create_cylinder(aedtapp.PLANE.ZX, udp, 10, "$coax_dimension", numSides=0, name="outer")
+
+###############################################################################
+# Assign a Color
+# ~~~~~~~~~~~~~~
+# You can assign change color to every primitve created.
+
+o1.color = (255, 0, 0)
+o2.color = (0, 255, 0)
+o3.color = (255, 0, 0)
+o3.transparency = 0.8
+aedtapp.modeler.fit_all()
 
 ###############################################################################
 # Assign a Material
@@ -136,11 +139,12 @@ aedtapp.mesh.assign_length_mesh(o2.faces, False, 1, 2000)
 # and then creates a sheet to cover the faces and assigns a port to this face.
 # If selected, a PEC cap is also created.
 
-aedtapp.create_wave_port_between_objects("inner", "outer", axisdir=0, add_pec_cap=True, portname="P1")
-aedtapp.create_wave_port_between_objects("inner", "outer", axisdir=3, add_pec_cap=True, portname="P2")
+aedtapp.create_wave_port_between_objects("inner", "outer", axisdir=1, add_pec_cap=True, portname="P1")
+aedtapp.create_wave_port_between_objects("inner", "outer", axisdir=4, add_pec_cap=True, portname="P2")
 
 portnames = aedtapp.get_all_sources()
 aedtapp.modeler.fit_all()
+
 
 ###############################################################################
 # Generate a Setup
@@ -154,7 +158,6 @@ setup = aedtapp.create_setup("MySetup")
 setup.props["Frequency"] = "1GHz"
 setup.props["BasisOrder"] = 2
 setup.props["MaximumPasses"] = 1
-setup.update()
 
 ###############################################################################
 # Generate a Sweep
@@ -198,7 +201,6 @@ ipkapp.edit_design_settings(aedtapp.GravityDirection.ZNeg)
 
 setup_ipk = ipkapp.create_setup("SetupIPK")
 setup_ipk.props["Convergence Criteria - Max Iterations"] = 3
-setup_ipk.update()
 
 ################################################################################
 # Edit or Review Mesh Parameters
@@ -206,9 +208,9 @@ setup_ipk.update()
 # After a mesh is created, a mesh operation is accessible for
 # editing or reviewing parameters.
 
-airbox = ipkapp.modeler.primitives.get_obj_id("Region")
-ipkapp.modeler.primitives[airbox].display_wireframe = True
-airfaces = ipkapp.modeler.primitives.get_object_faces(airbox)
+airbox = ipkapp.modeler.get_obj_id("Region")
+ipkapp.modeler[airbox].display_wireframe = True
+airfaces = ipkapp.modeler.get_object_faces(airbox)
 ipkapp.assign_openings(airfaces)
 
 ################################################################################
@@ -249,10 +251,10 @@ setup_name = "MySetup : LastAdaptive"
 quantity_name = "ComplexMag_E"
 quantity_name2 = "ComplexMag_H"
 intrinsic = {"Freq": "1GHz", "Phase": "0deg"}
-surflist = aedtapp.modeler.primitives.get_object_faces("outer")
+surflist = aedtapp.modeler.get_object_faces("outer")
 plot1 = aedtapp.post.create_fieldplot_surface(surflist, quantity_name2, setup_name, intrinsic)
 
-results_folder = os.path.join(aedtapp.project_path, "Coaxial_Results_NG")
+results_folder = os.path.join(aedtapp.working_directory, "Coaxial_Results_NG")
 if not os.path.exists(results_folder):
     os.mkdir(results_folder)
 
@@ -260,11 +262,9 @@ aedtapp.post.plot_field_from_fieldplot(
     plot1.name,
     project_path=results_folder,
     meshplot=False,
-    setup_name=setup_name,
-    intrinsic_dict=intrinsic,
     imageformat="jpg",
     view="isometric",
-    off_screen=True,
+    show=False,
 )
 
 ################################################################################
@@ -277,7 +277,7 @@ import time
 start = time.time()
 cutlist = ["Global:XY"]
 phases = [str(i * 5) + "deg" for i in range(18)]
-aedtapp.post.animate_fields_from_aedtplt_2(
+animated = aedtapp.post.animate_fields_from_aedtplt_2(
     quantityname="Mag_E",
     object_list=cutlist,
     plottype="CutPlane",
@@ -287,9 +287,16 @@ aedtapp.post.animate_fields_from_aedtplt_2(
     project_path=results_folder,
     variation_variable="Phase",
     variation_list=phases,
-    off_screen=True,
-    export_gif=True,
+    show=False,
+    export_gif=False,
 )
+animated.gif_file = os.path.join(aedtapp.working_directory, "animate.gif")
+animated.camera_position = [0, 50, 200]
+animated.focal_point = [0, 50, 0]
+# Set off_screen to False to visualize the animation.
+# animated.off_screen = False
+animated.animate()
+
 endtime = time.time() - start
 print("Total Time", endtime)
 
@@ -302,17 +309,16 @@ print("Total Time", endtime)
 quantity_name = "Temperature"
 setup_name = ipkapp.existing_analysis_sweeps[0]
 intrinsic = ""
-surflist = ipkapp.modeler.primitives.get_object_faces("inner")
+surflist = ipkapp.modeler.get_object_faces("inner")
 plot5 = ipkapp.post.create_fieldplot_surface(surflist, "SurfTemperature")
 
 ipkapp.post.plot_field_from_fieldplot(
     plot5.name,
     project_path=results_folder,
     meshplot=False,
-    setup_name=setup_name,
     imageformat="jpg",
     view="isometric",
-    off_screen=True,
+    show=False,
 )
 
 aedtapp.save_project()
@@ -320,33 +326,18 @@ aedtapp.save_project()
 ################################################################################
 # Use Matplotlib and Numpy to Generate Graphs
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# This example use Matplotlib and Numpy to generate graphs outside of PyAEDT.
+# This example uses Matplotlib and Numpy to generate report outside of Electronics Desktop.
 
-trace_names = []
-for el in portnames:
-    for el2 in portnames:
-        trace_names.append("S(" + el + "," + el2 + ")")
+trace_names = aedtapp.get_traces_for_plot(category="S")
 cxt = ["Domain:=", "Sweep"]
 families = ["Freq:=", ["All"]]
-my_data = aedtapp.post.get_report_data(expression=trace_names)
-freq_data = np.array(my_data.sweeps["Freq"])
-
-comp = []
-fig, ax = plt.subplots(figsize=(20, 10))
-
-ax.set(xlabel="Frequency (Ghz)", ylabel="SParameters(dB)", title="Scattering Chart")
-ax.grid()
-for el in trace_names:
-    mag_data = np.array(my_data.data_db(el))
-    ax.plot(freq_data, mag_data)
-plt.savefig(os.path.join(results_folder, project_name + ".svg"))
-plt.savefig(os.path.join(results_folder, project_name + ".jpg"))
-plt.show()
+my_data = aedtapp.post.get_solution_data(expressions=trace_names)
+my_data.plot(trace_names, "db20", xlabel="Frequency (Ghz)", ylabel="SParameters(dB)", title="Scattering Chart")
 
 ################################################################################
 # Close the Project and AEDT
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~
 # This example closes the project and then closes AEDT.
 
-#aedtapp.close_project(aedtapp.project_name)
+# aedtapp.close_project(aedtapp.project_name)
 aedtapp.release_desktop()

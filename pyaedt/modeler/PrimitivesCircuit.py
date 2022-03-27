@@ -1,17 +1,23 @@
+import math
+import os
 import random
 import warnings
-import os
-import math
 
-from pyaedt.generic.general_methods import aedt_exception_handler, _retry_ntimes, generate_unique_name
-from pyaedt.modeler.Object3d import CircuitComponent
 from pyaedt.generic.constants import AEDT_UNITS
+from pyaedt.generic.general_methods import _retry_ntimes
+from pyaedt.generic.general_methods import filter_string
+from pyaedt.generic.general_methods import generate_unique_name
+from pyaedt.generic.general_methods import pyaedt_function_handler
+from pyaedt.generic.general_methods import recursive_glob
+from pyaedt.generic.LoadAEDTFile import load_keyword_in_aedt_file
 from pyaedt.generic.TouchstoneParser import _parse_ports_name
+from pyaedt.modeler.Object3d import CircuitComponent
+
 
 class CircuitComponents(object):
     """CircutComponents class.
 
-    Manages all circuit components for Nexxim and Simplorer.
+    Manages all circuit components for Nexxim and Twin Builder.
 
     Examples
     --------
@@ -21,7 +27,7 @@ class CircuitComponents(object):
     >>> prim = aedtapp.modeler.schematic
     """
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __getitem__(self, partname):
         """Retrieve a part.
 
@@ -125,22 +131,22 @@ class CircuitComponents(object):
                 nets.append(v[0].replace("Wire@", ""))
         return nets
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _get_location(self, location=None):
         if not location:
             xpos = self.current_position[0]
             ypos = self.current_position[1]
-            self.current_position[1] += AEDT_UNITS["Length"]["mil"] * self.increment_mils[1]
-            if self.current_position[1] > self.limits_mils:
-                self.current_position[1] = 0
-                self.current_position[0] += AEDT_UNITS["Length"]["mil"] * self.increment_mils[0]
         else:
             xpos = location[0]
             ypos = location[1]
             self.current_position = location
+        self.current_position[1] += AEDT_UNITS["Length"]["mil"] * self.increment_mils[1]
+        if self.current_position[1] / AEDT_UNITS["Length"]["mil"] > self.limits_mils:
+            self.current_position[1] = 0
+            self.current_position[0] += AEDT_UNITS["Length"]["mil"] * self.increment_mils[0]
         return xpos, ypos
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_unique_id(self):
         """Create an unique ID.
 
@@ -155,7 +161,7 @@ class CircuitComponents(object):
             id = random.randint(1, 65535)
         return id
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_wire(self, points_array):
         """Create a wire.
 
@@ -182,7 +188,34 @@ class CircuitComponents(object):
         )
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
+    def add_pin_iports(self, name, id_num):
+        """Add ports on pins.
+
+        Parameters
+        ----------
+        name : str
+            Name of the component.
+        id_num : int
+            ID of circuit component.
+
+        Returns
+        -------
+        bool
+            ``True`` when successful, ``False`` when failed.
+
+        References
+        ----------
+
+        >>> oeditor.AddPinIPorts
+        """
+        comp_id = "CompInst@" + name + ";" + str(id_num) + ";395"
+        arg1 = ["Name:Selections", "Selections:=", [comp_id]]
+        self._oeditor.AddPinIPorts(arg1)
+
+        return True
+
+    @pyaedt_function_handler()
     def create_iport(self, name, posx=0.1, posy=0.1, angle=0):
         """Create an interface port.
 
@@ -192,7 +225,7 @@ class CircuitComponents(object):
         warnings.warn("`create_iport` is deprecated. Use `create_interface_port` instead.", DeprecationWarning)
         return self.create_interface_port(name, posx, posy, angle)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_interface_port(self, name, location=[], angle=0):
         """Create an interface port.
 
@@ -215,7 +248,10 @@ class CircuitComponents(object):
 
         >>> oEditor.CreateIPort
         """
-        posx, posy = self._get_location(location)
+        if location:
+            posx, posy = location[0], location[1]
+        else:
+            posx, posy = self._get_location(location)
         id = self.create_unique_id()
         arg1 = ["NAME:IPortProps", "Name:=", name, "Id:=", id]
         arg2 = ["NAME:Attributes", "Page:=", 1, "X:=", posx, "Y:=", posy, "Angle:=", angle, "Flip:=", False]
@@ -229,7 +265,7 @@ class CircuitComponents(object):
                 return self.components[el]
         return False
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_page_port(self, name, location=[], angle=0):
         """Create a page port.
 
@@ -252,7 +288,10 @@ class CircuitComponents(object):
 
         >>> oEditor.CreatePagePort
         """
-        xpos, ypos = self._get_location(location)
+        if location:
+            xpos, ypos = location[0], location[1]
+        else:
+            xpos, ypos = self._get_location(location)
 
         id = self.create_unique_id()
         id = self._oeditor.CreatePagePort(
@@ -264,7 +303,7 @@ class CircuitComponents(object):
         self.add_id_to_component(id)
         return self.components[id]
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_gnd(self, location=[]):
         """Create a ground.
 
@@ -297,7 +336,7 @@ class CircuitComponents(object):
             if name in self.components[el].composed_name:
                 return self.components[el]
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_model_from_touchstone(self, touchstone_full_path, model_name=None):
         """Create a model from a Touchstone file.
 
@@ -323,11 +362,12 @@ class CircuitComponents(object):
             model_name = os.path.splitext(os.path.basename(touchstone_full_path))[0]
         if model_name in list(self.o_model_manager.GetNames()):
             model_name = generate_unique_name(model_name, n=2)
-        num_terminal = int(touchstone_full_path[-2:-1])
-        with open(touchstone_full_path, 'r') as f:
+        num_terminal = int(os.path.splitext(touchstone_full_path)[1].lower().strip(".sp"))
+        with open(touchstone_full_path, "r") as f:
             port_names = _parse_ports_name(f)
-        image_subcircuit_path = os.path.normpath(os.path.join(self._modeler._app.desktop_install_dir, "syslib",
-                                                              "Bitmaps", "nport.bmp"))
+        image_subcircuit_path = os.path.normpath(
+            os.path.join(self._modeler._app.desktop_install_dir, "syslib", "Bitmaps", "nport.bmp")
+        )
         if not port_names:
             port_names = ["Port" + str(i + 1) for i in range(num_terminal)]
         arg = [
@@ -533,7 +573,7 @@ class CircuitComponents(object):
         self.o_component_manager.Add(arg)
         return model_name
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_component_from_touchstonmodel(
         self,
         model_name,
@@ -563,7 +603,7 @@ class CircuitComponents(object):
         """
         return self.create_touchsthone_component(model_name, location, angle)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_touchsthone_component(
         self,
         model_name,
@@ -605,7 +645,7 @@ class CircuitComponents(object):
         self.add_id_to_component(id)
         return self.components[id]
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_component(
         self,
         inst_name=None,
@@ -667,7 +707,7 @@ class CircuitComponents(object):
             self.enable_global_netlist(component_name, global_netlist_list)
         return self.components[id]
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def disable_data_netlist(self, component_name):
         """Disable the Nexxim global net list.
 
@@ -702,7 +742,7 @@ class CircuitComponents(object):
         )
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def enable_global_netlist(self, component_name, global_netlist_list=[]):
         """Enable Nexxim global net list.
 
@@ -742,7 +782,7 @@ class CircuitComponents(object):
         )
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_symbol(self, symbol_name, pin_lists):
         """Create a symbol.
 
@@ -870,146 +910,7 @@ class CircuitComponents(object):
         oDefinitionEditor.CloseEditor()
         return True
 
-    @aedt_exception_handler
-    def create_new_component_from_symbol(
-        self, symbol_name, pin_lists, Refbase="U", parameter_list=[], parameter_value=[]
-    ):
-        """Create a component from a symbol.
-
-        Parameters
-        ----------
-        symbol_name : str
-            Name of the symbol.
-        pin_lists : list
-            List of the pins.
-        Refbase : str, optional
-            Reference base. The default is ``"U"``.
-        parameter_list : list, optional
-            List of the parameters. The default is ``[]``.
-        parameter_value : list, optional
-            List of the parameter values. The default is ``[]``.
-
-        Returns
-        -------
-        bool
-            ``True`` when successful, ``False`` when failed.
-
-        References
-        ----------
-
-        >>> oComponentManager.Add
-        """
-        arg = [
-            "NAME:" + symbol_name,
-            "Info:=",
-            [
-                "Type:=",
-                0,
-                "NumTerminals:=",
-                5,
-                "DataSource:=",
-                "",
-                "ModifiedOn:=",
-                1591858313,
-                "Manufacturer:=",
-                "",
-                "Symbol:=",
-                symbol_name,
-                "ModelNames:=",
-                "",
-                "Footprint:=",
-                "",
-                "Description:=",
-                "",
-                "InfoTopic:=",
-                "",
-                "InfoHelpFile:=",
-                "",
-                "IconFile:=",
-                "",
-                "Library:=",
-                "",
-                "OriginalLocation:=",
-                "Project",
-                "IEEE:=",
-                "",
-                "Author:=",
-                "",
-                "OriginalAuthor:=",
-                "",
-                "CreationDate:=",
-                1591858278,
-                "ExampleFile:=",
-                "",
-                "HiddenComponent:=",
-                0,
-                "CircuitEnv:=",
-                0,
-                "GroupID:=",
-                0,
-            ],
-            "CircuitEnv:=",
-            0,
-            "Refbase:=",
-            Refbase,
-            "NumParts:=",
-            1,
-            "ModSinceLib:=",
-            True,
-        ]
-
-        for pin in pin_lists:
-            arg.append("Terminal:=")
-            arg.append([pin, pin, "A", False, 0, 1, "", "Electrical", "0"])
-        arg.append("CompExtID:=")
-        arg.append(1)
-        arg2 = ["NAME:Parameters"]
-        for el, val in zip(parameter_list, parameter_value):
-            if isinstance(val, str):
-                arg2.append("TextValueProp:=")
-                arg2.append([el, "D", "", val])
-            else:
-                arg2.append("ValueProp:=")
-                arg2.append([el, "D", "", val, False, ""])
-        arg2.append("ButtonProp:=")
-        arg2.append(["CosimDefinition", "D", "", "Edit", "Edit", 40501, "ButtonPropClientData:=", []])
-        arg2.append("MenuProp:=")
-        arg2.append(["CoSimulator", "D", "", "DefaultNetlist", 0])
-
-        arg.append(arg2)
-        spicesintax = Refbase + "@ID "
-        id = 0
-        while id < (len(pin_lists) - 1):
-            spicesintax += "%" + str(id) + " "
-            id += 1
-        for el in parameter_list:
-            spicesintax += "@{} ".format(el)
-
-        arg3 = [
-            "NAME:CosimDefinitions",
-            [
-                "NAME:CosimDefinition",
-                "CosimulatorType:=",
-                4,
-                "CosimDefName:=",
-                "DefaultNetlist",
-                "IsDefinition:=",
-                True,
-                "Connect:=",
-                True,
-                "Data:=",
-                ["Nexxim Circuit:=", spicesintax],
-                "GRef:=",
-                ["Nexxim Circuit:=", ""],
-            ],
-            "DefaultCosim:=",
-            "DefaultNetlist",
-        ]
-        arg.append(arg3)
-        self.o_component_manager.Add(arg)
-        return True
-
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def enable_use_instance_name(self, component_library="Resistors", component_name="RES_"):
         """Enable the use of the instance name.
 
@@ -1058,7 +959,7 @@ class CircuitComponents(object):
         )
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def refresh_all_ids(self):
         """Refresh all IDs and return the number of components.
 
@@ -1083,7 +984,7 @@ class CircuitComponents(object):
                     self.components[objID] = o
         return len(self.components)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def add_id_to_component(self, id):
         """Add an ID to a component.
 
@@ -1115,7 +1016,7 @@ class CircuitComponents(object):
 
         return len(self.components)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_obj_id(self, objname):
         """Retrieve the ID of an object.
 
@@ -1134,7 +1035,7 @@ class CircuitComponents(object):
                 return el
         return None
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_pins(self, partid):
         """Retrieve one or more pins.
 
@@ -1163,7 +1064,7 @@ class CircuitComponents(object):
             # pins = self.oeditor.GetComponentPins(self.components[partid].composed_name)
         return list(pins)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_pin_location(self, partid, pinname):
         """Retrieve the location of a pin.
 
@@ -1196,7 +1097,7 @@ class CircuitComponents(object):
             )
         return [x, y]
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def arg_with_dim(self, Value, sUnits=None):
         """Format an argument with dimensions.
 
@@ -1221,3 +1122,134 @@ class CircuitComponents(object):
             val = "{0}{1}".format(Value, sUnits)
 
         return val
+
+
+class ComponentInfo(object):
+    """Class that manage Circuit Catalog info."""
+
+    def __init__(self, name, component_manager, file_name, component_library):
+        self._component_manager = component_manager
+        self.file_name = file_name
+        self.name = name
+        self.component_library = component_library
+        self._props = None
+
+    @property
+    def props(self):
+        """Retrieve the component properties."""
+        if not self._props:
+            self._props = load_keyword_in_aedt_file(self.file_name, self.name)
+        return self._props
+
+    @pyaedt_function_handler()
+    def place(self, inst_name, location=[], angle=0, use_instance_id_netlist=False):
+        """Create a component from a library.
+
+        Parameters
+        ----------
+        inst_name : str, optional
+            Name of the instance. The default is ``None.``
+        location : list of float, optional
+            Position on the X axis and Y axis.
+        angle : optional
+            Angle rotation in degrees. The default is ``0``.
+        use_instance_id_netlist : bool, optional
+            Whether to enable the instance ID in the net list.
+            The default is ``False``.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.Object3d.CircuitComponent`
+            Circuit Component Object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateComponent
+        """
+        return self._component_manager.create_component(
+            inst_name=inst_name,
+            component_library=self.component_library,
+            component_name=self.name,
+            location=location,
+            angle=angle,
+            use_instance_id_netlist=use_instance_id_netlist,
+        )
+
+
+class ComponentCatalog(object):
+    """Class that indexes Circuit Sys Catalog."""
+
+    @pyaedt_function_handler()
+    def __getitem__(self, compname):
+        """Get component from name.
+
+        Parameters
+        ----------
+        compname : str
+            ID or name of the object.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.PrimitivesCircuit.ComponentInfo`
+            Circuit Component Info.
+
+        """
+        items = self.find_components("*" + compname)
+        if items and len(items) == 1:
+            return self.components[items[0]]
+        elif len(items) > 1:
+            self._component_manager._logger.warning("Multiple components found.")
+            return None
+        else:
+            self._component_manager._logger.warning("Component not found.")
+            return None
+
+    def __init__(self, component_manager):
+        self._component_manager = component_manager
+        self._app = self._component_manager._app
+        self.components = {}
+        self._index_components()
+
+    @pyaedt_function_handler()
+    def _index_components(self, library_path=None):
+        if library_path:
+            sys_files = recursive_glob(library_path, "*.aclb")
+            root = os.path.normpath(library_path).split(os.path.sep)[-1]
+        else:
+            sys_files = recursive_glob(os.path.join(self._app.syslib, self._component_manager.design_libray), "*.aclb")
+            root = os.path.normpath(self._app.syslib).split(os.path.sep)[-1]
+        for file in sys_files:
+            comps1 = load_keyword_in_aedt_file(file, "DefInfo")
+            comps2 = load_keyword_in_aedt_file(file, "CompInfo")
+            comps = comps1.get("DefInfo", {})
+            comps.update(comps2.get("CompInfo", {}))
+            for compname, comp_value in comps.items():
+                root_name, ext = os.path.splitext(os.path.normpath(file))
+                full_path = root_name.split(os.path.sep)
+                id = full_path.index(root) + 1
+                if self._component_manager.design_libray in full_path[id:]:
+                    id += 1
+                comp_lib = "\\".join(full_path[id:]) + ":" + compname
+                self.components[comp_lib] = ComponentInfo(
+                    compname, self._component_manager, file, comp_lib.split(":")[0]
+                )
+
+    @pyaedt_function_handler()
+    def find_components(self, filter_str="*"):
+        """Find all components with given filter wildcards.
+
+        Parameters
+        ----------
+        filter_str : str
+            Filter String to search.
+
+        Returns
+        list
+            List of matching component names.
+        """
+        c = []
+        for el in list(self.components.keys()):
+            if filter_string(el, filter_str):
+                c.append(el)
+        return c

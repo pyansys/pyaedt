@@ -2,18 +2,21 @@
 This module contains these clases: `CircuitPort`, `CurrentSource`, `EdbSiwave`,
 `PinGroup`, `ResistorSource`, `Source`, `SourceType`, and `VoltageSource`.
 """
-
 import os
 import time
 import warnings
 
-from pyaedt.generic.general_methods import aedt_exception_handler, generate_unique_name, _retry_ntimes, is_ironpython
+from pyaedt.generic.general_methods import _retry_ntimes
+from pyaedt.generic.general_methods import generate_unique_name
+from pyaedt.generic.general_methods import is_ironpython
+from pyaedt.generic.general_methods import pyaedt_function_handler
 
 try:
     from System import String
     from System.Collections.Generic import Dictionary
 except ImportError:
-    warnings.warn("This module requires pythonnet.")
+    if os.name != "posix":
+        warnings.warn("This module requires pythonnet.")
 
 
 class SiwaveDCSetupTemplate(object):
@@ -387,10 +390,9 @@ class EdbSiwave(object):
         """EDB."""
         return self._pedb.edb
 
-    @property
-    def _edb_value(self):
-        """EDB."""
-        return self._pedb.edb_value
+    def _get_edb_value(self, value):
+        """Get the Edb value."""
+        return self._pedb.edb_value(value)
 
     @property
     def _logger(self):
@@ -412,7 +414,7 @@ class EdbSiwave(object):
         """ """
         return self._pedb.db
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _create_terminal_on_pins(self, source):
         """Create a terminal on pins.
 
@@ -453,7 +455,7 @@ class EdbSiwave(object):
         if source.type == SourceType.Port:
             pos_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.PortBoundary)
             neg_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.PortBoundary)
-            pos_pingroup_terminal.SetSourceAmplitude(self._edb_value(source.impedance))
+            pos_pingroup_terminal.SetSourceAmplitude(self._get_edb_value(source.impedance))
             pos_pingroup_terminal.SetIsCircuitPort(True)
             neg_pingroup_terminal.SetIsCircuitPort(True)
             pos_pingroup_terminal.SetReferenceTerminal(neg_pingroup_terminal)
@@ -466,8 +468,8 @@ class EdbSiwave(object):
         elif source.type == SourceType.CurrentSource:
             pos_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kCurrentSource)
             neg_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kCurrentSource)
-            pos_pingroup_terminal.SetSourceAmplitude(self._edb_value(source.magnitude))
-            pos_pingroup_terminal.SetSourcePhase(self._edb_value(source.phase))
+            pos_pingroup_terminal.SetSourceAmplitude(self._get_edb_value(source.magnitude))
+            pos_pingroup_terminal.SetSourcePhase(self._get_edb_value(source.phase))
             pos_pingroup_terminal.SetReferenceTerminal(neg_pingroup_terminal)
             try:
                 pos_pingroup_terminal.SetName(source.name)
@@ -479,8 +481,8 @@ class EdbSiwave(object):
         elif source.type == SourceType.VoltageSource:
             pos_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kVoltageSource)
             neg_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kVoltageSource)
-            pos_pingroup_terminal.SetSourceAmplitude(self._edb_value(source.magnitude))
-            pos_pingroup_terminal.SetSourcePhase(self._edb_value(source.phase))
+            pos_pingroup_terminal.SetSourceAmplitude(self._get_edb_value(source.magnitude))
+            pos_pingroup_terminal.SetSourcePhase(self._get_edb_value(source.phase))
             pos_pingroup_terminal.SetReferenceTerminal(neg_pingroup_terminal)
             try:
                 pos_pingroup_terminal.SetName(source.name)
@@ -493,12 +495,12 @@ class EdbSiwave(object):
             pos_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.RlcBoundary)
             neg_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.RlcBoundary)
             pos_pingroup_terminal.SetReferenceTerminal(neg_pingroup_terminal)
-            pos_pingroup_terminal.SetSourceAmplitude(self._edb_value(source.rvalue))
+            pos_pingroup_terminal.SetSourceAmplitude(self._get_edb_value(source.rvalue))
             Rlc = self._edb.Utility.Rlc()
             Rlc.CEnabled = False
             Rlc.LEnabled = False
             Rlc.REnabled = True
-            Rlc.R = self._edb_value(source.rvalue)
+            Rlc.R = self._get_edb_value(source.rvalue)
             pos_pingroup_terminal.SetRlcBoundaryParameters(Rlc)
             try:
                 pos_pingroup_terminal.SetName(source.name)
@@ -510,7 +512,7 @@ class EdbSiwave(object):
             pass
         return pos_pingroup_terminal.GetName()
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_circuit_port_on_pin(self, pos_pin, neg_pin, impedance=50, port_name=None):
         """Create a circuit port on a pin.
 
@@ -555,7 +557,7 @@ class EdbSiwave(object):
         circuit_port.negative_node.node_pins = neg_pin
         return self._create_terminal_on_pins(circuit_port)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_voltage_source_on_pin(self, pos_pin, neg_pin, voltage_value=3.3, phase_value=0, source_name=""):
         """Create a voltage source.
 
@@ -605,7 +607,7 @@ class EdbSiwave(object):
         voltage_source.negative_node.node_pins = pos_pin
         return self._create_terminal_on_pins(voltage_source)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_current_source_on_pin(self, pos_pin, neg_pin, current_value=0.1, phase_value=0, source_name=""):
         """Create a current source.
 
@@ -654,7 +656,7 @@ class EdbSiwave(object):
         current_source.negative_node.node_pins = neg_pin
         return self._create_terminal_on_pins(current_source)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_resistor_on_pin(self, pos_pin, neg_pin, rvalue=1, resistor_name=""):
         """Create a voltage source.
 
@@ -700,7 +702,7 @@ class EdbSiwave(object):
         resistor.negative_node.node_pins = neg_pin
         return self._create_terminal_on_pins(resistor)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _check_gnd(self, component_name):
         negative_net_name = None
         if self._pedb.core_nets.is_net_in_component(component_name, "GND"):
@@ -715,7 +717,7 @@ class EdbSiwave(object):
             raise ValueError("No GND, PGND, AGND, DGND found. Please setup the negative net name manually.")
         return negative_net_name
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_circuit_port_on_net(
         self,
         positive_component_name,
@@ -780,7 +782,7 @@ class EdbSiwave(object):
         circuit_port.negative_node.node_pins = neg_node_pins
         return self.create_pin_group_terminal(circuit_port)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_voltage_source_on_net(
         self,
         positive_component_name,
@@ -848,7 +850,7 @@ class EdbSiwave(object):
         voltage_source.negative_node.node_pins = neg_node_pins
         return self.create_pin_group_terminal(voltage_source)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_current_source_on_net(
         self,
         positive_component_name,
@@ -916,7 +918,7 @@ class EdbSiwave(object):
         current_source.negative_node.node_pins = neg_node_pins
         return self.create_pin_group_terminal(current_source)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_resistor_on_net(
         self,
         positive_component_name,
@@ -979,7 +981,7 @@ class EdbSiwave(object):
         resistor.negative_node.node_pins = neg_node_pins
         return self.create_pin_group_terminal(resistor)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_exec_file(self):
         """Create an executable file."""
         workdir = os.path.dirname(self._pedb.edbpath)
@@ -989,7 +991,7 @@ class EdbSiwave(object):
         f = open(file_name, "w")
         return f
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def add_siwave_ac_analysis(
         self,
         accuracy_level=1,
@@ -1039,7 +1041,7 @@ class EdbSiwave(object):
         exec_file.close()
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def add_siwave_syz_analysis(
         self,
         accuracy_level=1,
@@ -1091,7 +1093,7 @@ class EdbSiwave(object):
         exec_file.close()
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_siwave_dc_setup_template(self):
         """Get the siwave dc template.
 
@@ -1101,7 +1103,7 @@ class EdbSiwave(object):
         """
         return SiwaveDCSetupTemplate()
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def add_siwave_dc_analysis(self, setup_settings=SiwaveDCSetupTemplate()):
         """Create a Siwave DC Analysis in EDB.
 
@@ -1180,7 +1182,7 @@ class EdbSiwave(object):
                 return True
         return False
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create_pin_group_terminal(self, source):
         """Create a pin group terminal.
 
@@ -1219,7 +1221,7 @@ class EdbSiwave(object):
         if source.type == SourceType.Port:
             pos_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.PortBoundary)
             neg_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.PortBoundary)
-            pos_pingroup_terminal.SetSourceAmplitude(self._edb_value(source.impedance))
+            pos_pingroup_terminal.SetSourceAmplitude(self._get_edb_value(source.impedance))
             pos_pingroup_terminal.SetIsCircuitPort(True)
             neg_pingroup_terminal.SetIsCircuitPort(True)
             pos_pingroup_terminal.SetReferenceTerminal(neg_pingroup_terminal)
@@ -1233,7 +1235,7 @@ class EdbSiwave(object):
         elif source.type == SourceType.CurrentSource:
             pos_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kCurrentSource)
             neg_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kCurrentSource)
-            pos_pingroup_terminal.SetSourceAmplitude(self._edb_value(source.magnitude))
+            pos_pingroup_terminal.SetSourceAmplitude(self._get_edb_value(source.magnitude))
             pos_pingroup_terminal.SetSourcePhase(self._edb.Utility.Value(source.phase))
             pos_pingroup_terminal.SetReferenceTerminal(neg_pingroup_terminal)
             try:
@@ -1246,8 +1248,8 @@ class EdbSiwave(object):
         elif source.type == SourceType.VoltageSource:
             pos_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kVoltageSource)
             neg_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kVoltageSource)
-            pos_pingroup_terminal.SetSourceAmplitude(self._edb_value(source.magnitude))
-            pos_pingroup_terminal.SetSourcePhase(self._edb_value(source.phase))
+            pos_pingroup_terminal.SetSourceAmplitude(self._get_edb_value(source.magnitude))
+            pos_pingroup_terminal.SetSourcePhase(self._get_edb_value(source.phase))
             pos_pingroup_terminal.SetReferenceTerminal(neg_pingroup_terminal)
             try:
                 pos_pingroup_terminal.SetName(source.name)
@@ -1260,12 +1262,12 @@ class EdbSiwave(object):
             pos_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.RlcBoundary)
             neg_pingroup_terminal.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.RlcBoundary)
             pos_pingroup_terminal.SetReferenceTerminal(neg_pingroup_terminal)
-            pos_pingroup_terminal.SetSourceAmplitude(self._edb_value(source.rvalue))
+            pos_pingroup_terminal.SetSourceAmplitude(self._get_edb_value(source.rvalue))
             Rlc = self._edb.Utility.Rlc()
             Rlc.CEnabled = False
             Rlc.LEnabled = False
             Rlc.REnabled = True
-            Rlc.R = self._edb_value(source.rvalue)
+            Rlc.R = self._get_edb_value(source.rvalue)
             pos_pingroup_terminal.SetRlcBoundaryParameters(Rlc)
 
         else:

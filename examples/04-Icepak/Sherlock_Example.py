@@ -1,10 +1,9 @@
 """
-Icepack Setup from Sherlock Inputs
-----------------------------------
+Icepack: Setup from Sherlock Inputs
+-----------------------------------
 This example shows how to create an Icepak project starting from Sherlock
 # files (STEP and CSV) and an AEDB board.
 """
-# sphinx_gallery_thumbnail_path = 'Resources/sherlock.png'
 
 import time
 import os
@@ -38,7 +37,7 @@ outline_polygon_name = "poly_14188"
 ###############################################################################
 # Import PyAEDT and Launch AEDT
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# This example launches AEDT 2021.2 in graphical mode.
+# This example launches AEDT 2022R1 in graphical mode.
 
 from pyaedt import Icepak
 from pyaedt import Desktop
@@ -51,7 +50,7 @@ from pyaedt import Desktop
 
 NonGraphical = False
 
-d = Desktop("2021.2", non_graphical=NonGraphical, new_desktop_session=True)
+d = Desktop("2022.1", non_graphical=NonGraphical, new_desktop_session=True)
 
 start = time.time()
 material_list = os.path.join(input_dir, material_name)
@@ -73,7 +72,7 @@ ipk = Icepak()
 # This example remove the region and disables autosave to speed up the import.
 
 d.disable_autosave()
-ipk.modeler.primitives.delete("Region")
+ipk.modeler.delete("Region")
 component_name = "from_ODB"
 
 ###############################################################################
@@ -109,12 +108,20 @@ ipk.modeler.import_3d_cad(file_path, refresh_all_ids=False)
 
 ipk.save_project(project_name, refresh_obj_ids_after_save=True)
 
+
+###############################################################################
+# Plot the model
+# ~~~~~~~~~~~~~~
+
+ipk.plot(show=False, export_path=os.path.join(temp_folder, "Sherlock_Example.jpg"), plot_air_objects=False)
+
+
 ###############################################################################
 # Remove PCB Objects
 # ~~~~~~~~~~~~~~~~~~
 # This command removes the PCB objects.
 
-ipk.modeler.primitives.delete_objects_containing("pcb", False)
+ipk.modeler.delete_objects_containing("pcb", False)
 
 ###############################################################################
 # Create a Region
@@ -135,8 +142,8 @@ ipk.assignmaterial_from_sherlock_files(component_list, material_list)
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # This example deletes objects that have no materials assigned.
 
-no_material_objs = ipk.modeler.primitives.get_objects_by_material("")
-ipk.modeler.primitives.delete(no_material_objs)
+no_material_objs = ipk.modeler.get_objects_by_material("")
+ipk.modeler.delete(no_material_objs)
 ipk.save_project()
 
 ###############################################################################
@@ -144,7 +151,7 @@ ipk.save_project()
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # This command assigns power to component blocks.
 
-all_objects = ipk.modeler.primitives.object_names
+all_objects = ipk.modeler.object_names
 
 ###############################################################################
 # Assign Power Blocks
@@ -152,6 +159,15 @@ all_objects = ipk.modeler.primitives.object_names
 # This command assigns power blocks from the Sherlock file.
 
 total_power = ipk.assign_block_from_sherlock_file(component_list)
+
+
+###############################################################################
+# Plot the model
+# ~~~~~~~~~~~~~~
+# We do the same plot after the material assignment
+
+ipk.plot(show=False, export_path=os.path.join(temp_folder, "Sherlock_Example.jpg"), plot_air_objects=False)
+
 
 ###############################################################################
 # Set Up Boundaries
@@ -165,8 +181,7 @@ setup1.props["Solution Initialization - Y Velocity"] = "1m_per_sec"
 setup1.props["Radiation Model"] = "Discrete Ordinates Model"
 setup1.props["Include Gravity"] = True
 setup1.props["Secondary Gradient"] = True
-setup1.update()
-ipk.assign_openings(ipk.modeler.primitives.get_object_faces("Region"))
+ipk.assign_openings(ipk.modeler.get_object_faces("Region"))
 
 ###############################################################################
 # Check for Intersection

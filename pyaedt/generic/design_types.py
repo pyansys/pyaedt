@@ -1,4 +1,6 @@
+import re
 import sys
+
 try:
     from pyaedt.hfss3dlayout import Hfss3dLayout
     from pyaedt.hfss import Hfss
@@ -10,7 +12,9 @@ try:
     from pyaedt.maxwell import Maxwell2d, Maxwell3d
     from pyaedt.mechanical import Mechanical
     from pyaedt.rmxprt import Rmxprt
-    from pyaedt.simplorer import Simplorer
+    from pyaedt.twinbuilder import TwinBuilder
+    from pyaedt.twinbuilder import TwinBuilder as Simplorer  # noqa: F401 # namespace only for backward compatibility
+    from pyaedt.maxwellcircuit import MaxwellCircuit
     from pyaedt.emit import Emit
     from pyaedt.desktop import Desktop
 except ImportError:
@@ -24,7 +28,9 @@ except ImportError:
     from pyaedt.maxwell import Maxwell2d, Maxwell3d
     from pyaedt.mechanical import Mechanical
     from pyaedt.rmxprt import Rmxprt
-    from pyaedt.simplorer import Simplorer
+    from pyaedt.twinbuilder import TwinBuilder
+    from pyaedt.twinbuilder import TwinBuilder as Simplorer  # noqa: F401 # namespace only for backward compatibility
+    from pyaedt.maxwellcircuit import MaxwellCircuit
     from pyaedt.emit import Emit
     from pyaedt.desktop import Desktop
 
@@ -32,7 +38,8 @@ except ImportError:
 app_map = {
     "Maxwell 2D": Maxwell2d,
     "Maxwell 3D": Maxwell3d,
-    "Twin Builder": Simplorer,
+    "Maxwell Circuit": MaxwellCircuit,
+    "Twin Builder": TwinBuilder,
     "Circuit Design": Circuit,
     "2D Extractor": Q2d,
     "Q3D Extractor": Q3d,
@@ -44,8 +51,9 @@ app_map = {
     "EMIT": Emit,
     "EDB": Edb,
     "Desktop": Desktop,
-    "Siwave": Siwave
+    "Siwave": Siwave,
 }
+
 
 def get_pyaedt_app(project_name=None, design_name=None):
     """Returns the Pyaedt Object of specific projec_name and design_name.
@@ -71,7 +79,11 @@ def get_pyaedt_app(project_name=None, design_name=None):
             oProject = main.oDesktop.SetActiveProject(project_name)
         if not oProject:
             raise AttributeError("No Project Present.")
-        design_names = [i.GetName() for i in oProject.GetDesigns()]
+        design_names = []
+        deslist = list(oProject.GetTopDesignList())
+        for el in deslist:
+            m = re.search(r"[^;]+$", el)
+            design_names.append(m.group(0))
         if design_name and design_name not in design_names:
             raise AttributeError("Design  {} doesn't exists in current Project.".format(design_name))
         if not design_name:

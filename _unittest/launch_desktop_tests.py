@@ -1,5 +1,14 @@
 # Import required modules
-from pyaedt import Hfss, Maxwell2d, Maxwell3d, Q2d, Q3d, Simplorer, Hfss3dLayout, Icepak, Circuit, Mechanical
+from pyaedt import Circuit
+from pyaedt import Hfss
+from pyaedt import Hfss3dLayout
+from pyaedt import Icepak
+from pyaedt import Maxwell2d
+from pyaedt import Maxwell3d
+from pyaedt import Mechanical
+from pyaedt import Q2d
+from pyaedt import Q3d
+from pyaedt import TwinBuilder
 
 
 def run_desktop_tests():
@@ -23,7 +32,7 @@ def run_desktop_tests():
     assert aedtapp.solution_type == "HFSS3DLayout"
     aedtapp.close_desktop()
 
-    aedtapp = Simplorer(specified_version="2021.2")
+    aedtapp = TwinBuilder(specified_version="2021.2")
     assert aedtapp.design_type == "Twin Builder"
     assert aedtapp.solution_type == "TR"
     aedtapp.close_desktop()
@@ -45,7 +54,7 @@ def run_desktop_tests():
 
     aedtapp = Hfss(specified_version="2021.2")
     assert aedtapp.design_type == "HFSS"
-    assert aedtapp.solution_type == "DrivenModal"
+    assert "Modal" in aedtapp.solution_type
     aedtapp.close_desktop()
 
     aedtapp = Maxwell3d(specified_version="2021.2")
@@ -54,5 +63,5 @@ def run_desktop_tests():
     aedtapp.close_desktop()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_desktop_tests()

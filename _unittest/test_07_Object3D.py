@@ -1,30 +1,21 @@
 # standard imports
-import gc
 import math
-import os
 
-# Import required modules
-from pyaedt import Hfss
-from pyaedt.generic.filesystem import Scratch
-from pyaedt.generic.general_methods import isclose, time_fn
-from pyaedt.modeler.Object3d import FacePrimitive, _to_boolean, _uname
-
-from _unittest.conftest import scratch_path
+from _unittest.conftest import BasisTest
+from pyaedt.generic.general_methods import isclose
+from pyaedt.generic.general_methods import time_fn
+from pyaedt.modeler.Object3d import _to_boolean
+from pyaedt.modeler.Object3d import _uname
+from pyaedt.modeler.Object3d import FacePrimitive
 
 
-class TestClass:
+class TestClass(BasisTest, object):
     def setup_class(self):
-        with Scratch(scratch_path) as self.local_scratch:
-            test_projectfile = os.path.join(self.local_scratch.path, "test_object3d" + ".aedt")
-            self.aedtapp = Hfss()
-            self.aedtapp.save_project(project_file=test_projectfile)
-            self.prim = self.aedtapp.modeler.primitives
+        BasisTest.my_setup(self)
+        self.aedtapp = BasisTest.add_app(self, project_name="Test07")
 
     def teardown_class(self):
-        self.aedtapp._desktop.ClearMessages("", "", 3)
-        self.aedtapp.close_project(name=self.aedtapp.project_name, saveproject=False)
-        self.local_scratch.remove()
-        gc.collect()
+        BasisTest.my_teardown(self)
 
     def create_example_coil(self, name=None):
         if not name:
@@ -48,35 +39,35 @@ class TestClass:
             [(RI + N) * math.cos(tetarad), (RI + N) * math.sin(tetarad), HT / 2],
         ]
 
-        if self.aedtapp.modeler.primitives[name]:
-            self.aedtapp.modeler.primitives.delete(name)
-        return self.aedtapp.modeler.primitives.create_polyline(position_list=pointsList1, name=name)
+        if self.aedtapp.modeler[name]:
+            self.aedtapp.modeler.delete(name)
+        return self.aedtapp.modeler.create_polyline(position_list=pointsList1, name=name)
 
     def create_copper_box(self, name=None):
         if not name:
             name = "MyBox"
-        o = self.aedtapp.modeler.primitives[name]
+        o = self.aedtapp.modeler[name]
         if not o:
-            o = self.aedtapp.modeler.primitives.create_box([0, 0, 0], [10, 10, 5], name, "Copper")
+            o = self.aedtapp.modeler.create_box([0, 0, 0], [10, 10, 5], name, "Copper")
         return o
 
     def create_copper_box_test_performance(self):
         for o in range(10):
-            o = self.aedtapp.modeler.primitives.create_box([0, 0, 0], [10, 10, 5], "MyboxLoop", "Copper")
+            o = self.aedtapp.modeler.create_box([0, 0, 0], [10, 10, 5], "MyboxLoop", "Copper")
 
     def create_copper_sphere(self, name=None):
         if not name:
             name = "Mysphere"
-        if self.aedtapp.modeler.primitives[name]:
-            self.aedtapp.modeler.primitives.delete(name)
-        return self.aedtapp.modeler.primitives.create_sphere([0, 0, 0], radius=4, name=name, matname="Copper")
+        if self.aedtapp.modeler[name]:
+            self.aedtapp.modeler.delete(name)
+        return self.aedtapp.modeler.create_sphere([0, 0, 0], radius=4, name=name, matname="Copper")
 
     def create_copper_cylinder(self, name=None):
         if not name:
             name = "MyCyl"
-        if self.aedtapp.modeler.primitives[name]:
-            self.aedtapp.modeler.primitives.delete(name)
-        return self.aedtapp.modeler.primitives.create_cylinder(
+        if self.aedtapp.modeler[name]:
+            self.aedtapp.modeler.delete(name)
+        return self.aedtapp.modeler.create_cylinder(
             cs_axis="Y", position=[0, 0, 0], radius=1, height=20, numSides=8, name=name, matname="Copper"
         )
 
@@ -88,16 +79,25 @@ class TestClass:
         time_fn(self.create_copper_box_test_performance)
 
     def test_01_bounding_box(self):
+        l1 = len(self.aedtapp.modeler.solid_objects)
         o = self.create_copper_box()
-        a = o.color
+        assert len(self.aedtapp.modeler.solid_objects) == l1 + 1
+        assert len(self.aedtapp.modeler.sheet_objects) == 0
+        assert len(self.aedtapp.modeler.line_objects) == 0
+        assert isinstance(o.color, tuple)
         bb = o.bounding_box
         assert len(bb) == 6
+
+    def test_01_bounding_dimension(self):
+        o = self.create_copper_box()
+        bd = o.bounding_dimension
+        assert len(bd) == 3
 
     def test_01_delete_object(self):
         o = self.create_copper_box("DeleteBox")
         name = o.name
         o.delete()
-        assert not self.aedtapp.modeler.primitives[name]
+        assert not self.aedtapp.modeler[name]
         assert not o.__dict__
 
     def test_01_subtract_object(self):
@@ -145,6 +145,12 @@ class TestClass:
         assert non_planar_face.move_with_offset(1)
         assert isclose(non_planar_face.area, 314.1592653589793)
         assert not non_planar_face.normal
+        o_box2 = self.aedtapp.modeler.create_box([300, 300, 300], [10, 10, 5], "BoxBounding", "Copper")
+        for face in o_box2.faces:
+            assert isinstance(face.is_on_bounding(), bool)
+        assert len(o_box2.faces_on_bounding_box) == 3
+        assert not o_sphere.faces[0].is_planar
+        assert o_box.faces[0].is_planar
 
     def test_04_object_material_property_invalid(self):
         o_box = self.create_copper_box("Invalid1")
@@ -224,7 +230,7 @@ class TestClass:
         assert not _to_boolean("no")
 
     def test_10_chamfer(self):
-        initial_object = self.prim.create_box([0, 0, 0], [10, 10, 5], "ChamferTest", "Copper")
+        initial_object = self.aedtapp.modeler.create_box([0, 0, 0], [10, 10, 5], "ChamferTest", "Copper")
         object_edges = initial_object.edges
         assert len(object_edges) == 12
         test = initial_object.edges[0].chamfer(left_distance=0.2)
@@ -239,20 +245,20 @@ class TestClass:
         test = initial_object.edges[4].chamfer(chamfer_type=4)
         assert not test
 
-        self.aedtapp.modeler.primitives.delete(initial_object)
+        self.aedtapp.modeler.delete(initial_object)
 
     def test_11_fillet(self):
-        initial_object = self.prim.create_box([0, 0, 0], [10, 10, 5], "FilletTest", "Copper")
+        initial_object = self.aedtapp.modeler.create_box([0, 0, 0], [10, 10, 5], "FilletTest", "Copper")
         object_edges = initial_object.edges
         assert len(object_edges) == 12
         test = initial_object.edges[0].fillet(radius=0.2)
         assert test
         test = initial_object.edges[1].fillet(radius=0.2, setback=0.1)
         assert not test
-        self.aedtapp.modeler.primitives.delete(initial_object)
+        self.aedtapp.modeler.delete(initial_object)
 
     def test_object_length(self):
-        initial_object = self.prim.create_box([0, 0, 0], [10, 10, 5], "FilletTest", "Copper")
+        initial_object = self.aedtapp.modeler.create_box([0, 0, 0], [10, 10, 5], "FilletTest", "Copper")
         test_edge = initial_object.edges[0]
         assert isinstance(test_edge.length, float)
 
@@ -262,10 +268,10 @@ class TestClass:
         for i in range(0, 3):
             sum_sq += (end_point.position[i] - start_point.position[i]) ** 2
         assert isclose(math.sqrt(sum_sq), test_edge.length)
-        self.aedtapp.modeler.primitives.delete(initial_object)
+        self.aedtapp.modeler.delete(initial_object)
 
     def test_12_set_color(self):
-        initial_object = self.prim.create_box([0, 0, 0], [10, 10, 5], "ColorTest")
+        initial_object = self.aedtapp.modeler.create_box([0, 0, 0], [10, 10, 5], "ColorTest")
         initial_object.color = "Red"
         assert initial_object.color == (255, 0, 0)
         initial_object.color = "Green"
@@ -289,7 +295,7 @@ class TestClass:
         initial_object.color = (255, "Invalid", 0)
         assert initial_object.color == (255, 0, 0)
 
-        self.aedtapp.modeler.primitives.delete("ColorTest")
+        self.aedtapp.modeler.delete("ColorTest")
 
     def test_print_object(self):
         o = self.create_copper_box()
@@ -307,9 +313,9 @@ class TestClass:
     def test_13_delete_self(self):
         o = self.create_copper_box()
         my_name = o.name
-        assert my_name in self.aedtapp.modeler.primitives.object_names
+        assert my_name in self.aedtapp.modeler.object_names
         o.delete()
-        assert my_name not in self.aedtapp.modeler.primitives.object_names
+        assert my_name not in self.aedtapp.modeler.object_names
 
     def test_14_translate_delete_self(self):
         o = self.create_copper_box()
@@ -319,21 +325,47 @@ class TestClass:
         assert v1[0] == v0[0] + 1.0
         assert v1[1] == v0[1]
         assert v1[2] == v0[2]
+        assert o.move([1, 0, 0])
 
     def test_15_duplicate_around_axis_and_unite(self):
         turn = self.create_example_coil("single_turn")
         added_objects = turn.duplicate_around_axis(cs_axis="Z", angle=8, nclones=19)
         turn.unite(added_objects)
         assert len(added_objects) == 18
-        assert "single_turn" in self.aedtapp.modeler.primitives.line_names
+        assert "single_turn" in self.aedtapp.modeler.line_names
 
     def test_16_duplicate_around_axis_and_unite(self):
         turn = self.create_example_coil("single_turn")
         added_objects = turn.duplicate_along_line([0, 0, 15], nclones=3, attachObject=False)
         assert len(added_objects) == 2
-        assert "single_turn" in self.aedtapp.modeler.primitives.line_names
+        assert "single_turn" in self.aedtapp.modeler.line_names
 
-    # TODO: Finish asserts anc check the boolean inputs - they are not present in the GUI ??
     def test_17_section_object(self):
-        o = self.aedtapp.modeler.primitives.create_box([-10, 0, 0], [10, 10, 5], "SectionBox", "Copper")
+        o = self.aedtapp.modeler.create_box([-10, 0, 0], [10, 10, 5], "SectionBox", "Copper")
         o.section(plane="YZ", create_new=True, section_cross_object=False)
+
+    def test_18_create_spiral(self):
+        sp1 = self.aedtapp.modeler.create_spiral(name="ind")
+        assert sp1
+        assert sp1.name == "ind"
+        assert len(sp1.points) == 78
+
+    def test_19_rotate(self):
+        o = self.aedtapp.modeler.create_box([-10, 0, 0], [10, 10, 5], "RotateBox", "Copper")
+        assert o.rotate(cs_axis="Y", angle=180)
+
+    def test_20_mirror(self):
+        o = self.aedtapp.modeler.create_box([-10, 0, 0], [10, 10, 5], "MirrorBox", "Copper")
+        assert o.mirror(position=[-10, 0, 0], vector=[0, 1, 0])
+
+    def test_21_groups(self):
+        o1 = self.aedtapp.modeler.create_box([-10, 0, 0], [10, 10, 5], "GroupB1", "Copper")
+        o2 = self.aedtapp.modeler.create_box([-10, 0, 0], [10, 10, 5], "GroupB2", "Copper")
+        assert o1.group_name == "Model"
+        o1.group_name = "NewGroup"
+        assert o1.group_name == "NewGroup"
+        o2.group_name = "NewGroup"
+        assert o2.group_name == "NewGroup"
+        o2.group_name = "NewGroup2"
+        assert o2.group_name == "NewGroup2"
+        assert o1.group_name == "NewGroup"

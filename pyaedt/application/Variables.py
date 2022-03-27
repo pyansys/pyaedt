@@ -12,13 +12,17 @@ Examples
 >>> hfss["postd"] = "1W"
 
 """
-from __future__ import absolute_import, division
+
+from __future__ import absolute_import, division  # noreorder
 
 import os
 import re
 
-from pyaedt import aedt_exception_handler
-from pyaedt.generic.constants import AEDT_UNITS, SI_UNITS, unit_system, _resolve_unit_system
+from pyaedt import pyaedt_function_handler
+from pyaedt.generic.constants import _resolve_unit_system
+from pyaedt.generic.constants import AEDT_UNITS
+from pyaedt.generic.constants import SI_UNITS
+from pyaedt.generic.constants import unit_system
 from pyaedt.generic.general_methods import is_number
 
 
@@ -138,7 +142,7 @@ class CSVDataset:
 
         pass
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __getitem__(self, item):
         variable_list = item.split(",")
         data_out = CSVDataset()
@@ -153,7 +157,7 @@ class CSVDataset:
             data_out._header.append(variable)
         return data_out
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __add__(self, other):
         assert self.number_of_columns == other.number_of_columns, "Inconsistent number of columns"
         # Create a new object to return, avoiding changing the original inputs
@@ -224,7 +228,7 @@ class CSVDataset:
         return self.__next__()
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def _find_units_in_dependent_variables(variable_value, full_variables={}):
     m2 = re.findall(r"[0-9.]+ *([a-z_A-Z]+)", variable_value)
     if len(m2) > 0:
@@ -243,7 +247,7 @@ def _find_units_in_dependent_variables(variable_value, full_variables={}):
     return ""
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def decompose_variable_value(variable_value, full_variables={}):
     """Decompose a variable value.
 
@@ -604,21 +608,21 @@ class VariableManager(object):
         # Global Desktop Environment
         self._app = app
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __delitem__(self, key):
         """Implement del with array name or index."""
         self.delete_variable(key)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __getitem__(self, variable_name):
         return self.variables[variable_name]
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __setitem__(self, variable, value):
         self.set_variable(variable, value)
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _variable_dict(self, object_list, dependent=True, independent=True):
         """Retrieve the variable dictionary.
 
@@ -660,7 +664,7 @@ class VariableManager(object):
                         var_dict[variable_name] = Expression(variable_expression, float_value, all_names)
         return var_dict
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def get_expression(self, variable_name):
         """Retrieve the variable value of a project or design variable as a string.
 
@@ -672,7 +676,7 @@ class VariableManager(object):
         """
         return self.aedt_object(variable_name).GetVariableValue(variable_name)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def aedt_object(self, variable):
         """Retrieve an AEDT object.
 
@@ -687,9 +691,16 @@ class VariableManager(object):
         else:
             return self._odesign
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def set_variable(
-        self, variable_name, expression=None, readonly=False, hidden=False, description=None, overwrite=True
+        self,
+        variable_name,
+        expression=None,
+        readonly=False,
+        hidden=False,
+        description=None,
+        overwrite=True,
+        postprocessing=False,
     ):
         """Set the value of a design property or project variable.
 
@@ -758,10 +769,10 @@ class VariableManager(object):
         desktop_object = self.aedt_object(variable_name)
         test = desktop_object.GetName()
         proj_name = self._oproject.GetName()
-        var_type = "Project" if test == proj_name else "Local"
-
+        var_type = "Project" if "$" in variable_name[0] else "Local"
         prop_type = "VariableProp"
-
+        if postprocessing or "post" in variable_name.lower()[0:5]:
+            prop_type = "PostProcessingVariableProp"
         if isinstance(expression, str):
             # Handle string type variable (including arbitrary expression)# Handle input type variable
             variable = expression
@@ -780,21 +791,18 @@ class VariableManager(object):
             try:
                 if self.delete_separator(variable_name):
                     desktop_object.Undo()
-                    self.logger.clear_messages()
+                    self._logger.clear_messages()
                     return
             except:
                 pass
         else:
-            raise Exception("Unhandled input type to the design property or project variable.")
-
-        if "post" in variable_name.lower()[0:5]:
-            prop_type = "PostProcessingVariableProp"
+            raise Exception("Unhandled input type to the design property or project variable.")  # pragma: no cover
 
         # Get all design and project variables in lower case for a case-sensitive comparison
         if self._app._is_object_oriented_enabled():
             var_list = list(desktop_object.GetChildObject("Variables").GetChildNames())
         else:
-            var_list = list(desktop_object.GetVariables())
+            var_list = list(desktop_object.GetVariables())  # pragma: no cover
         lower_case_vars = [var_name.lower() for var_name in var_list]
 
         if variable_name.lower() not in lower_case_vars:
@@ -876,10 +884,16 @@ class VariableManager(object):
                     ],
                 ]
             )
-
+        if self._app._is_object_oriented_enabled():
+            var_list = list(desktop_object.GetChildObject("Variables").GetChildNames())
+        else:
+            var_list = list(desktop_object.GetVariables())  # pragma: no cover
+        lower_case_vars = [var_name.lower() for var_name in var_list]
+        if variable_name not in lower_case_vars:
+            return False
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def delete_separator(self, separator_name):
         """Delete a separator from either the active project or design.
 
@@ -920,7 +934,7 @@ class VariableManager(object):
                 pass
         return False
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def delete_variable(self, var_name):
         """Delete a variable.
 
@@ -946,7 +960,7 @@ class VariableManager(object):
         if self._app._is_object_oriented_enabled():
             var_list = list(desktop_object.GetChildObject("Variables").GetChildNames())
         else:
-            var_list = list(desktop_object.GetVariables())
+            var_list = list(desktop_object.GetVariables())  # pragma: no cover
         lower_case_vars = [var_name.lower() for var_name in var_list]
 
         if var_name.lower() in lower_case_vars:
@@ -1016,7 +1030,10 @@ class Variable(object):
             self._units = specified_units
 
         if is_number(self._value):
-            scale = AEDT_UNITS[self.unit_system][self._units]
+            try:
+                scale = AEDT_UNITS[self.unit_system][self._units]
+            except KeyError:
+                scale = 1
             if isinstance(scale, tuple):
                 self._value = scale[0](self._value, inverse=False)
             else:
@@ -1041,7 +1058,10 @@ class Variable(object):
     def numeric_value(self):
         """Numeric part of the expression as a float value."""
         if is_number(self._value):
-            scale = AEDT_UNITS[self.unit_system][self._units]
+            try:
+                scale = AEDT_UNITS[self.unit_system][self._units]
+            except KeyError:
+                scale = 1
         if isinstance(scale, tuple):
             return scale[0](self._value, True)
         else:
@@ -1058,7 +1078,7 @@ class Variable(object):
         """
         return ("{}{}").format(self.numeric_value, self._units)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def rescale_to(self, units):
         """Rescale the expression to a new unit within the current unit system.
 
@@ -1086,7 +1106,7 @@ class Variable(object):
         self._units = units
         return self
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def format(self, format):
         """Retrieve the string value with the specified numerical formatting.
 
@@ -1113,44 +1133,44 @@ class Variable(object):
         """
         return ("{0:" + format + "}{1}").format(self.numeric_value, self._units)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __mul__(self, other):
         """Multiply the variable with a number or another variable and return a new object.
 
-        Parameters
-        ---------
-        other : numbers.Number or variable
-            Object to be multiplied.
+                Parameters
+                ---------
+                other : numbers.Number or variable
+                    Object to be multiplied.
 
-        Returns
-        -------
-        type
-            Variable.
+                Returns
+                -------
+                type
+                    Variable.
 
-        Examples
-        --------
-        >>> from pyaedt.application.Variables import Variable
+                Examples
+                --------
+                >>> from pyaedt.application.Variables import Variable
 
-        Multiply ``'Length1'`` by unitless ``'None'``` to obtain ``'Length'``.
-        A numerical value is also considered to be unitless.
+                Multiply ``'Length1'`` by unitless ``'None'``` to obtain ``'Length'``.
+                A numerical value is also considered to be unitless.
 
-import pyaedt.generic.constants        >>> v1 = Variable("10mm")
-        >>> v2 = Variable(3)
-        >>> result_1 = v1 * v2
-        >>> result_2 = v1 * 3
-        >>> assert result_1.numeric_value == 30.0
-        >>> assert result_1.unit_system == "Length"
-        >>> assert result_2.numeric_value == result_1.numeric_value
-        >>> assert result_2.unit_system == "Length"
+        import pyaedt.generic.constants        >>> v1 = Variable("10mm")
+                >>> v2 = Variable(3)
+                >>> result_1 = v1 * v2
+                >>> result_2 = v1 * 3
+                >>> assert result_1.numeric_value == 30.0
+                >>> assert result_1.unit_system == "Length"
+                >>> assert result_2.numeric_value == result_1.numeric_value
+                >>> assert result_2.unit_system == "Length"
 
-        Multiply voltage times current to obtain power.
+                Multiply voltage times current to obtain power.
 
-import pyaedt.generic.constants        >>> v3 = Variable("3mA")
-        >>> v4 = Variable("40V")
-        >>> result_3 = v3 * v4
-        >>> assert result_3.numeric_value == 0.12
-        >>> assert result_3.units == "W"
-        >>> assert result_3.unit_system == "Power"
+        import pyaedt.generic.constants        >>> v3 = Variable("3mA")
+                >>> v4 = Variable("40V")
+                >>> result_3 = v3 * v4
+                >>> assert result_3.numeric_value == 0.12
+                >>> assert result_3.units == "W"
+                >>> assert result_3.unit_system == "Power"
 
         """
         assert is_number(other) or isinstance(other, Variable), "Multiplier must be a scalar quantity or a variable."
@@ -1172,30 +1192,30 @@ import pyaedt.generic.constants        >>> v3 = Variable("3mA")
 
     __rmul__ = __mul__
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __add__(self, other):
         """Add the variable to another variable to return a new object.
 
-        Parameters
-        ---------
-        other : Variable
-            Object to be multiplied.
+                Parameters
+                ---------
+                other : Variable
+                    Object to be multiplied.
 
-        Returns
-        -------
-        type
-            Variable.
+                Returns
+                -------
+                type
+                    Variable.
 
-        Examples
-        --------
-        >>> from pyaedt.application.Variables import Variable
+                Examples
+                --------
+                >>> from pyaedt.application.Variables import Variable
 
-import pyaedt.generic.constants        >>> v1 = Variable("3mA")
-        >>> v2 = Variable("10A")
-        >>> result = v1 + v2
-        >>> assert result.numeric_value == 10.003
-        >>> assert result.units == "A"
-        >>> assert result.unit_system == "Current"
+        import pyaedt.generic.constants        >>> v1 = Variable("3mA")
+                >>> v2 = Variable("10A")
+                >>> result = v1 + v2
+                >>> assert result.numeric_value == 10.003
+                >>> assert result.units == "A"
+                >>> assert result.unit_system == "Current"
 
         """
         assert isinstance(other, Variable), "You can only add a variable with another variable."
@@ -1213,30 +1233,30 @@ import pyaedt.generic.constants        >>> v1 = Variable("3mA")
 
         return result_variable
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __sub__(self, other):
         """Subtract another variable from the variable to return a new object.
 
-        Parameters
-        ---------
-        other : Variable
-            Object to be subtracted.
+                Parameters
+                ---------
+                other : Variable
+                    Object to be subtracted.
 
-        Returns
-        -------
-        type
-            Variable.
+                Returns
+                -------
+                type
+                    Variable.
 
-        Examples
-        --------
+                Examples
+                --------
 
-import pyaedt.generic.constants        >>> from pyaedt.application.Variables import Variable
-        >>> v3 = Variable("3mA")
-        >>> v4 = Variable("10A")
-        >>> result_2 = v3 - v4
-        >>> assert result_2.numeric_value == -9.997
-        >>> assert result_2.units == "A"
-        >>> assert result_2.unit_system == "Current"
+        import pyaedt.generic.constants        >>> from pyaedt.application.Variables import Variable
+                >>> v3 = Variable("3mA")
+                >>> v4 = Variable("10A")
+                >>> result_2 = v3 - v4
+                >>> assert result_2.numeric_value == -9.997
+                >>> assert result_2.units == "A"
+                >>> assert result_2.unit_system == "Current"
 
         """
         assert isinstance(other, Variable), "You can only subtract a variable from another variable."
@@ -1255,33 +1275,33 @@ import pyaedt.generic.constants        >>> from pyaedt.application.Variables imp
         return result_variable
 
     # Python 3.x version
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __truediv__(self, other):
         """Divide the variable by a number or another variable to return a new object.
 
-        Parameters
-        ---------
-        other : numbers.Number or variable
-            Object by which to divide.
+                Parameters
+                ---------
+                other : numbers.Number or variable
+                    Object by which to divide.
 
-        Returns
-        -------
-        type
-            Variable.
+                Returns
+                -------
+                type
+                    Variable.
 
-        Examples
-        --------
-        Divide a variable with units ``"W"`` by a variable with units ``"V"`` and automatically
-        resolve the new units to ``"A"``.
+                Examples
+                --------
+                Divide a variable with units ``"W"`` by a variable with units ``"V"`` and automatically
+                resolve the new units to ``"A"``.
 
-        >>> from pyaedt.application.Variables import Variable
+                >>> from pyaedt.application.Variables import Variable
 
-import pyaedt.generic.constants        >>> v1 = Variable("10W")
-        >>> v2 = Variable("40V")
-        >>> result = v1 / v2
-        >>> assert result_1.numeric_value == 0.25
-        >>> assert result_1.units == "A"
-        >>> assert result_1.unit_system == "Current"
+        import pyaedt.generic.constants        >>> v1 = Variable("10W")
+                >>> v2 = Variable("40V")
+                >>> result = v1 / v2
+                >>> assert result_1.numeric_value == 0.25
+                >>> assert result_1.units == "A"
+                >>> assert result_1.unit_system == "Current"
 
         """
         assert is_number(other) or isinstance(other, Variable), "Divisor must be a scalar quantity or a variable."
@@ -1295,35 +1315,35 @@ import pyaedt.generic.constants        >>> v1 = Variable("10W")
         return Variable("{}{}".format(result_value, result_units))
 
     # Python 2.7 version
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __div__(self, other):
         return self.__truediv__(other)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def __rtruediv__(self, other):
         """Divide another object by this object.
 
-        Parameters
-        ---------
-        other : numbers.Number or variable
-            Object to divide by.
+                Parameters
+                ---------
+                other : numbers.Number or variable
+                    Object to divide by.
 
-        Returns
-        -------
-        type
-            Variable.
+                Returns
+                -------
+                type
+                    Variable.
 
-        Examples
-        --------
-        Divide a number by a variable with units ``"s"`` and automatically determine that
-        the result is in ``"Hz"``.
+                Examples
+                --------
+                Divide a number by a variable with units ``"s"`` and automatically determine that
+                the result is in ``"Hz"``.
 
-import pyaedt.generic.constants        >>> from pyaedt.application.Variables import Variable
-        >>> v = Variable("1s")
-        >>> result = 3.0 / v
-        >>> assert result.numeric_value == 3.0
-        >>> assert result.units == "Hz"
-        >>> assert result.unit_system == "Freq"
+        import pyaedt.generic.constants        >>> from pyaedt.application.Variables import Variable
+                >>> v = Variable("1s")
+                >>> result = 3.0 / v
+                >>> assert result.numeric_value == 3.0
+                >>> assert result.units == "Hz"
+                >>> assert result.unit_system == "Freq"
 
         """
         if is_number(other):
@@ -1337,7 +1357,7 @@ import pyaedt.generic.constants        >>> from pyaedt.application.Variables imp
         return Variable("{}{}".format(result_value, result_units))
 
     # # Python 2.7 version
-    # @aedt_exception_handler
+    # @pyaedt_function_handler()
     # def __div__(self, other):
     #     return self.__rtruediv__(other)
 
@@ -1406,7 +1426,7 @@ class DataSet(object):
         self.zunit = zunit
         self.vunit = vunit
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def _args(self):
         """Retrieve arguments."""
         arg = []
@@ -1436,7 +1456,7 @@ class DataSet(object):
         arg.append(arg2)
         return arg
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def create(self):
         """Create a dataset.
 
@@ -1457,7 +1477,7 @@ class DataSet(object):
             self._app._odesign.AddDataset(self._args())
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def add_point(self, x, y, z=None, v=None):
         """Add a point to the dataset.
 
@@ -1489,7 +1509,7 @@ class DataSet(object):
 
         return self.update()
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def remove_point_from_x(self, x):
         """Remove a point from an X-axis value.
 
@@ -1514,7 +1534,7 @@ class DataSet(object):
         id_to_remove = self.x.index(x)
         return self.remove_point_from_index(id_to_remove)
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def remove_point_from_index(self, id_to_remove):
         """Remove a point from an index.
 
@@ -1544,7 +1564,7 @@ class DataSet(object):
         self._app.logger.error("cannot Remove {} index.".format(id_to_remove))
         return False
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def update(self):
         """Update the dataset.
 
@@ -1568,7 +1588,7 @@ class DataSet(object):
             self._app._odesign.EditDataset(self.name, self._args())
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def delete(self):
         """Delete the dataset.
 
@@ -1591,7 +1611,7 @@ class DataSet(object):
             del self._app.project_datasets[self.name]
         return True
 
-    @aedt_exception_handler
+    @pyaedt_function_handler()
     def export(self, dataset_path=None):
         """Export the dataset.
 
@@ -1599,7 +1619,7 @@ class DataSet(object):
         ----------
         dataset_path : str, optional
             Path to export the dataset to. The default is ``None``, in which
-            case the dataset is exported to the project path.
+            case the dataset is exported to the working_directory path.
 
         Returns
         -------
@@ -1613,7 +1633,7 @@ class DataSet(object):
         >>> oDesign.ExportDataset
         """
         if not dataset_path:
-            dataset_path = os.path.join(self._app.project_path, self.name + ".tab")
+            dataset_path = os.path.join(self._app.working_directory, self.name + ".tab")
         if self.name[0] == "$":
             self._app._oproject.ExportDataset(self.name, dataset_path)
         else:

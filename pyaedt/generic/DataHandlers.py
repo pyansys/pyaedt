@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import math
+import os
 import random
 import re
 import string
@@ -8,8 +9,10 @@ import warnings
 from collections import OrderedDict
 from decimal import Decimal
 
-from pyaedt.generic.general_methods import aedt_exception_handler
-from pyaedt.modeler.Object3d import EdgePrimitive, FacePrimitive, VertexPrimitive
+from pyaedt.generic.general_methods import pyaedt_function_handler
+from pyaedt.modeler.Object3d import EdgePrimitive
+from pyaedt.modeler.Object3d import FacePrimitive
+from pyaedt.modeler.Object3d import VertexPrimitive
 
 try:
     import clr
@@ -20,10 +23,11 @@ try:
     clr.AddReference("System")
     from System import Double
 except ImportError:
-    warnings.warn("Pythonnet is needed to run pyaedt")
+    if os.name != "posix":
+        warnings.warn("Pythonnet is needed to run pyaedt")
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def _tuple2dict(t, d):
     """
 
@@ -54,7 +58,7 @@ def _tuple2dict(t, d):
         d[k] = v
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def _dict2arg(d, arg_out):
     """
 
@@ -70,7 +74,25 @@ def _dict2arg(d, arg_out):
 
     """
     for k, v in d.items():
-        if isinstance(v, (OrderedDict, dict)):
+        if "_pyaedt" in k:
+            continue
+        if k == "Point" or k == "DimUnits":
+            if isinstance(v[0], (list, tuple)):
+                for e in v:
+                    arg = ["NAME:" + k, e[0], e[1]]
+                    arg_out.append(arg)
+            else:
+                arg = ["NAME:" + k, v[0], v[1]]
+                arg_out.append(arg)
+        elif k == "Range":
+            if isinstance(v[0], (list, tuple)):
+                for e in v:
+                    arg_out.append(k + ":=")
+                    arg_out.append([i for i in e])
+            else:
+                arg_out.append(k + ":=")
+                arg_out.append([i for i in v])
+        elif isinstance(v, (OrderedDict, dict)):
             arg = ["NAME:" + k]
             _dict2arg(v, arg)
             arg_out.append(arg)
@@ -90,48 +112,58 @@ def _dict2arg(d, arg_out):
                 arg_out.append(v)
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def _arg2dict(arg, dict_out):
-    """
-
-    Parameters
-    ----------
-    arg :
-
-    dict_out :
-
-
-    Returns
-    -------
-
-    """
     if arg[0] == "NAME:DimUnits" or "NAME:Point" in arg[0]:
-        dict_out[arg[0][5:]] = list(arg[1:])
+        if arg[0][5:] in dict_out:
+            if isinstance(dict_out[arg[0][5:]][0], (list, tuple)):
+                dict_out[arg[0][5:]].append(list(arg[1:]))
+            else:
+                dict_out[arg[0][5:]] = [dict_out[arg[0][5:]]]
+                dict_out[arg[0][5:]].append(list(arg[1:]))
+        else:
+            dict_out[arg[0][5:]] = list(arg[1:])
     elif arg[0][:5] == "NAME:":
         top_key = arg[0][5:]
         dict_in = OrderedDict()
         i = 1
         while i < len(arg):
-            if (type(arg[i]) is list or type(arg[i]) is tuple or str(type(arg[i])) == r"<type 'List'>") and arg[i][0][
-                :5
-            ] == "NAME:":
+            if arg[i][0][:5] == "NAME:" and (
+                isinstance(arg[i], (list, tuple)) or str(type(arg[i])) == r"<type 'List'>"
+            ):
                 _arg2dict(list(arg[i]), dict_in)
                 i += 1
             elif arg[i][-2:] == ":=":
-                if str(type(arg[i+1])) == r"<type 'List'>":
-                    dict_in[arg[i][:-2]] = list(arg[i + 1])
+                if str(type(arg[i + 1])) == r"<type 'List'>":
+                    if arg[i][:-2] in dict_in:
+                        dict_in[arg[i][:-2]].append(list(arg[i + 1]))
+                    else:
+                        dict_in[arg[i][:-2]] = list(arg[i + 1])
                 else:
-                    dict_in[arg[i][:-2]] = arg[i + 1]
+                    if arg[i][:-2] in dict_in:
+                        if isinstance(dict_in[arg[i][:-2]], list):
+                            dict_in[arg[i][:-2]].append(arg[i + 1])
+                        else:
+                            dict_in[arg[i][:-2]] = [dict_in[arg[i][:-2]]]
+                            dict_in[arg[i][:-2]].append(arg[i + 1])
+                    else:
+                        dict_in[arg[i][:-2]] = arg[i + 1]
 
                 i += 2
             else:
                 raise ValueError("Incorrect data argument format")
-        dict_out[top_key] = dict_in
+        if top_key in dict_out:
+            if isinstance(dict_out[top_key], list):
+                dict_out[top_key].append(dict_in)
+            else:
+                dict_out[top_key] = [dict_out[top_key], dict_in]
+        else:
+            dict_out[top_key] = dict_in
     else:
         raise ValueError("Incorrect data argument format")
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def create_list_for_csharp(input_list, return_strings=False):
     """
 
@@ -159,7 +191,7 @@ def create_list_for_csharp(input_list, return_strings=False):
     return col
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def create_table_for_csharp(input_list_of_list, return_strings=True):
     """
 
@@ -181,7 +213,7 @@ def create_table_for_csharp(input_list_of_list, return_strings=True):
     return new_table
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def format_decimals(el):
     """
 
@@ -203,7 +235,7 @@ def format_decimals(el):
     return num
 
 
-@aedt_exception_handler
+@pyaedt_function_handler()
 def random_string(length=6, only_digits=False, char_set=None):
     """Generate a random string
 
@@ -232,6 +264,7 @@ def random_string(length=6, only_digits=False, char_set=None):
     return random_str
 
 
+@pyaedt_function_handler()
 def unique_string_list(element_list, only_string=True):
     """Return a unique list of strings from an element list.
 
@@ -266,6 +299,7 @@ def unique_string_list(element_list, only_string=True):
     return element_list
 
 
+@pyaedt_function_handler()
 def string_list(element_list):
     """
 
@@ -285,6 +319,7 @@ def string_list(element_list):
     return element_list
 
 
+@pyaedt_function_handler()
 def ensure_list(element_list):
     """
 
@@ -302,6 +337,7 @@ def ensure_list(element_list):
     return element_list
 
 
+@pyaedt_function_handler()
 def variation_string_to_dict(variation_string, separator="="):
     """Helper function to convert a list of "="-separated strings into a dictionary
 
@@ -362,6 +398,7 @@ RKM_MAPS = {
 AEDT_MAPS = {"μ": "u"}
 
 
+@pyaedt_function_handler()
 def from_rkm(code):
     """Convert an RKM code string to a string with a decimal point.
 
@@ -377,7 +414,7 @@ def from_rkm(code):
 
     Examples
     --------
-    >>> from pyaedt.generic.data_handling import from_rkm
+    >>> from pyaedt.generic.DataHandlers import from_rkm
     >>> from_rkm('R47')
     '0.47'
 
@@ -430,6 +467,7 @@ def from_rkm(code):
     return code
 
 
+@pyaedt_function_handler()
 def to_aedt(code):
     """
 
@@ -448,6 +486,7 @@ def to_aedt(code):
     return return_code
 
 
+@pyaedt_function_handler()
 def from_rkm_to_aedt(code):
     """
 
@@ -504,6 +543,7 @@ with Desktop() as d:
 """
 
 
+@pyaedt_function_handler()
 def float_units(val_str, units=""):
     """Retrieve units for a value.
 
@@ -534,6 +574,7 @@ def float_units(val_str, units=""):
     return val
 
 
+@pyaedt_function_handler()
 def json_to_dict(fn):
     """Load Json File to a dictionary.
 
