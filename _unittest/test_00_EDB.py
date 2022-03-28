@@ -194,6 +194,21 @@ class TestClass(BasisTest, object):
         assert layers.add_layer("NewLayer3", "BOT", "copper", "air", "0um", 0, negative_layer=True)
         assert layers.add_layer("NewLayer3", "BOT", "Duroid (tm)", "1.5mm", layerType=1)
 
+    def test_101_negative_properties_test(self):
+        layer = self.edbapp.core_stackup.stackup_layers["TOP"]
+        if not layer.negative_layer_value:
+            layer.negative_layer_value = True
+        assert layer.negative_layer_value
+
+    def test_102_roughness_property_test(self):
+        layer = self.edbapp.core_stackup.stackup_layers["TOP"]
+        if not layer.roughness_enabled_value:
+            layer.roughness_enabled_value = True
+        assert layer.roughness_enabled_value
+
+
+
+
     def test_11_add_dielectric(self):
         diel = self.edbapp.core_stackup.create_dielectric("MyDiel", 3.3, 0.02)
         assert diel
