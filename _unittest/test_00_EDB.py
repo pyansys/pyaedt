@@ -194,6 +194,7 @@ class TestClass(BasisTest, object):
         assert layers.add_layer("NewLayer3", "BOT", "copper", "air", "0um", 0, negative_layer=True)
         assert layers.add_layer("NewLayer3", "BOT", "Duroid (tm)", "1.5mm", layerType=1)
 
+
     def test_101_negative_properties_test(self):
         layer = self.edbapp.core_stackup.stackup_layers["TOP"]
         if not layer.negative_layer_value:
