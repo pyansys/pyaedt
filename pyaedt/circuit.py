@@ -616,7 +616,7 @@ class Circuit(FieldAnalysisCircuit, object):
             self._desktop.OpenProject(source_project_path)
             oSrcProject = self._desktop.SetActiveProject(source_project_name)
         oDesign = oSrcProject.SetActiveDesign(source_design_name)
-        oModule = oDesign.GetModule("BoundarySetup")
+        tmp_oModule = oDesign.GetModule("BoundarySetup")
         port = None
         if port_selector == 1:
             port = "Wave Port"
@@ -626,7 +626,7 @@ class Circuit(FieldAnalysisCircuit, object):
             port = "Circuit Port"
         if not port:
             return False
-        pins = list(oModule.GetExcitationsOfType(port))
+        pins = list(tmp_oModule.GetExcitationsOfType(port))
         self.logger.info("%s Excitations Pins found.", len(pins))
         return pins
 
@@ -1596,3 +1596,31 @@ class Circuit(FieldAnalysisCircuit, object):
         self.odesign.SaveDiffPairsToFile(filename)
 
         return os.path.isfile(filename)
+
+    @pyaedt_function_handler()
+    def add_netlist_datablock(self, netlist_file, datablock_name=None):
+        """Add a new netlist data block to the circuit schematic.
+
+        Parameters
+        ----------
+        netlist_file : str
+            Path to the netlist file.
+        datablock_name : str, optional
+            Name of the data block.
+
+        Returns
+        -------
+        bool
+            `True` if successfully created.
+        """
+        if not os.path.exists(netlist_file):
+            self.logger.error("Netlist File doesn't exists")
+            return False
+        if not datablock_name:
+            datablock_name = generate_unique_name("Inc")
+
+        tmp_oModule = self.odesign.GetModule("DataBlock")
+        tmp_oModule.AddNetlistDataBlock(
+            ["NAME:DataBlock", "name:=", datablock_name, "filename:=", netlist_file, "filelocation:=", 0]
+        )
+        return True

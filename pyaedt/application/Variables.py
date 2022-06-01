@@ -25,6 +25,7 @@ from pyaedt.generic.constants import SI_UNITS
 from pyaedt.generic.constants import unit_system
 from pyaedt.generic.general_methods import is_number, is_array
 from pyaedt import is_ironpython
+from pyaedt import settings
 
 
 class CSVDataset:
@@ -215,8 +216,8 @@ class CSVDataset:
         if self._index < (self.number_of_rows - 1):
             output = []
             for column in self._header:
-                string_value = str(self._data[column][self._index])
-                output.append(string_value)
+                evaluated_value = str(self._data[column][self._index])
+                output.append(evaluated_value)
             output_string = " ".join(output)
             self._index += 1
         else:
@@ -681,12 +682,12 @@ class VariableManager(object):
             for variable_name in listvar:
                 variable_expression = self.get_expression(variable_name)
                 all_names[variable_name] = variable_expression
-                # try:
                 si_value = self._app.get_evaluated_value(variable_name)
                 value = Variable(variable_expression, None, si_value, all_names, name=variable_name, app=self._app)
-                if independent and (is_array(value._calculated_value) or is_number(value._calculated_value)):
+                is_number_flag = is_number(value._calculated_value)
+                if independent and is_number_flag:
                     var_dict[variable_name] = value
-                elif dependent and not is_array(value._calculated_value) and not is_number(value._calculated_value):
+                elif dependent and not is_number_flag:
                     var_dict[variable_name] = value
         return var_dict
 
@@ -823,7 +824,7 @@ class VariableManager(object):
             variable = expression
         elif isinstance(expression, Variable):
             # Handle input type variable
-            variable = expression.string_value
+            variable = expression.evaluated_value
         elif is_number(expression):
             # Handle input type int/float, etc (including numeric 0)
             variable = str(expression)
@@ -1147,7 +1148,7 @@ class Variable(object):
         """Read-only flag value."""
         if self._app:
             try:
-                if not is_ironpython:
+                if not is_ironpython and (settings.aedt_version < "2022.2" or not settings.use_grpc_api):
                     return self._aedt_obj.GetChildObject("Variables").GetChildObject(self._variable_name).Get_ReadOnly
                 else:  # pragma: no cover
                     return self._aedt_obj.GetChildObject("Variables").GetChildObject(self._variable_name).Get_ReadOnly()
@@ -1170,7 +1171,7 @@ class Variable(object):
         """Hidden flag value."""
         if self._app:
             try:
-                if not is_ironpython:
+                if not is_ironpython and (settings.aedt_version < "2022.2" or not settings.use_grpc_api):
                     return self._aedt_obj.GetChildObject("Variables").GetChildObject(self._variable_name).Get_Hidden
                 else:  # pragma: no cover
                     return self._aedt_obj.GetChildObject("Variables").GetChildObject(self._variable_name).Get_Hidden()
@@ -1192,7 +1193,7 @@ class Variable(object):
         """Description value."""
         if self._app:
             try:
-                if not is_ironpython:
+                if not is_ironpython and (settings.aedt_version < "2022.2" or not settings.use_grpc_api):
                     return (
                         self._aedt_obj.GetChildObject("Variables").GetChildObject(self._variable_name).Get_Description
                     )
@@ -1289,7 +1290,7 @@ class Variable(object):
         return self._value
 
     @property
-    def string_value(self):
+    def evaluated_value(self):
         """String value.
 
         The numeric value with the unit is concatenated and returned as a string. The numeric display

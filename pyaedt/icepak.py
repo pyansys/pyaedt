@@ -167,11 +167,6 @@ class Icepak(FieldAnalysis3D):
         self.design_solutions.problem_type = value
 
     @property
-    def omodelsetup(self):
-        """AEDT Model Setup Object."""
-        return self._odesign.GetModule("ModelSetup")
-
-    @property
     def existing_analysis_sweeps(self):
         """Existing analysis setups.
 
@@ -777,8 +772,9 @@ class Icepak(FieldAnalysis3D):
         """
         if not monitor_name:
             monitor_name = generate_unique_name("Monitor")
-        oModule = self.odesign.GetModule("Monitor")
-        oModule.AssignFaceMonitor(["NAME:" + monitor_name, "Quantities:=", [monitor_type], "Objects:=", [face_name]])
+        self.omonitor.AssignFaceMonitor(
+            ["NAME:" + monitor_name, "Quantities:=", [monitor_type], "Objects:=", [face_name]]
+        )
         return True
 
     @pyaedt_function_handler()
@@ -829,8 +825,9 @@ class Icepak(FieldAnalysis3D):
         )
         if not monitor_name:
             monitor_name = generate_unique_name("Monitor")
-        oModule = self.odesign.GetModule("Monitor")
-        oModule.AssignPointMonitor(["NAME:" + monitor_name, "Quantities:=", [monitor_type], "Points:=", [point_name]])
+        self.omonitor.AssignPointMonitor(
+            ["NAME:" + monitor_name, "Quantities:=", [monitor_type], "Points:=", [point_name]]
+        )
         return True
 
     @pyaedt_function_handler()
@@ -2330,7 +2327,6 @@ class Icepak(FieldAnalysis3D):
 
         >>> oModule.EditGlobalMeshRegion
         """
-        oModule = self.odesign.GetModule("MeshRegion")
 
         oBoundingBox = self.modeler.oeditor.GetModelBoundingBox()
         xsize = abs(float(oBoundingBox[0]) - float(oBoundingBox[3])) / (15 * meshtype * meshtype)
@@ -2338,7 +2334,7 @@ class Icepak(FieldAnalysis3D):
         zsize = abs(float(oBoundingBox[2]) - float(oBoundingBox[5])) / (10 * meshtype)
         MaxSizeRatio = 1 + (meshtype / 2)
 
-        oModule.EditGlobalMeshRegion(
+        self.omeshmodule.EditGlobalMeshRegion(
             [
                 "NAME:Settings",
                 "MeshMethod:=",
@@ -2484,11 +2480,10 @@ class Icepak(FieldAnalysis3D):
         arg2 = ["NAME:Attributes", "Name:=", point_name, "Color:=", "(143 175 143)"]
 
         self.modeler.oeditor.CreatePoint(arg1, arg2)
-        monitor = self._odesign.GetModule("Monitor")
 
         arg = ["NAME:" + str(point_name), "Quantities:=", ["Temperature"], "Points:=", [str(point_name)]]
 
-        monitor.AssignPointMonitor(arg)
+        self.omonitor.AssignPointMonitor(arg)
         return True
 
     @pyaedt_function_handler()

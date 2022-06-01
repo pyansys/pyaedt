@@ -290,9 +290,7 @@ class NexximComponents(CircuitComponents):
         >>> oEditor.PasteDesign
         """
         self._app._oproject.CopyDesign(sourcename)
-        self._oeditor.PasteDesign(
-            0, ["NAME:Attributes", "Page:=", 1, "X:=", 0, "Y:=", 0, "Angle:=", 0, "Flip:=", False]
-        )
+        self.oeditor.PasteDesign(0, ["NAME:Attributes", "Page:=", 1, "X:=", 0, "Y:=", 0, "Angle:=", 0, "Flip:=", False])
         self.refresh_all_ids()
         for el in self.components:
             if sourcename in self.components[el].composed_name:
@@ -1396,7 +1394,7 @@ class NexximComponents(CircuitComponents):
         #     matrix = ["NAME:Reduce Matrix Choices"] + list(pyaedt_app.omatrix.ListReduceMatrixes())
         # variables = {}
         # for k, v in pyaedt_app.variable_manager.variables.items():
-        #     variables[k] = v.string_value
+        #     variables[k] = v.evaluated_value
         if not solution_name:
             solution_name = pyaedt_app.nominal_sweep
         # comp = self._add_subcircuit_link(

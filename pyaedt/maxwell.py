@@ -18,35 +18,7 @@ from pyaedt.modules.Boundary import BoundaryObject, MaxwellParameters
 
 class Maxwell(object):
     def __init__(self):
-        self._odefinition_manager = self.materials.odefinition_manager
-        self._omaterial_manager = self.materials.omaterial_manager
-        self._o_maxwell_parameters = self.odesign.GetModule("MaxwellParameterSetup")
         pass
-
-    @property
-    def o_maxwell_parameters(self):
-        """AEDT Maxwel Parameter Setup Object.
-
-        References
-        ----------
-
-        >>> oDesign.GetModule("MaxwellParameterSetup")
-        """
-        return self._o_maxwell_parameters
-
-    @property
-    def omodelsetup(self):
-        """AEDT Model Setup Object.
-
-        References
-        ----------
-
-        >>> oDesign.GetModule("ModelSetup")
-        """
-        if self.solution_type != "Transient":
-            return None
-        else:
-            return self._odesign.GetModule("ModelSetup")
 
     @property
     def symmetry_multiplier(self):
@@ -202,10 +174,10 @@ class Maxwell(object):
         Set matrix in a Maxwell analysis.
 
         >>> m2d = Maxwell2d(solution_type="MagnetostaticXY", close_on_exit=True, specified_version="2022.1")
-        >>> coil1 = m2d.modeler.primitives.create_rectangle([0, 1.5, 0], [8, 3], is_covered=True, name="Coil_1")
-        >>> coil2 = m2d.modeler.primitives.create_rectangle([8.5, 1.5, 0], [8, 3], is_covered=True, name="Coil_2")
-        >>> coil3 = m2d.modeler.primitives.create_rectangle([16, 1.5, 0], [8, 3], is_covered=True, name="Coil_3")
-        >>> coil4 = m2d.modeler.primitives.create_rectangle([32, 1.5, 0], [8, 3], is_covered=True, name="Coil_4")
+        >>> coil1 = m2d.modeler.create_rectangle([0, 1.5, 0], [8, 3], is_covered=True, name="Coil_1")
+        >>> coil2 = m2d.modeler.create_rectangle([8.5, 1.5, 0], [8, 3], is_covered=True, name="Coil_2")
+        >>> coil3 = m2d.modeler.create_rectangle([16, 1.5, 0], [8, 3], is_covered=True, name="Coil_3")
+        >>> coil4 = m2d.modeler.create_rectangle([32, 1.5, 0], [8, 3], is_covered=True, name="Coil_4")
         >>> current1 = m2d.assign_current("Coil_1", amplitude=1, swap_direction=False, name="Current1")
         >>> current2 = m2d.assign_current("Coil_2", amplitude=1, swap_direction=True, name="Current2")
         >>> current3 = m2d.assign_current("Coil_3", amplitude=1, swap_direction=True, name="Current3")

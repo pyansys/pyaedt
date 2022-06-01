@@ -13,6 +13,7 @@ except ImportError:
     import _unittest_ironpython.conf_unittest as pytest  # noqa: F401
 
 from pyaedt.generic.general_methods import is_ironpython
+from pyaedt.application.aedt_objects import AedtObjects
 
 test_project_name = "Coax_HFSS"
 
@@ -116,7 +117,7 @@ class TestClass(BasisTest, object):
     def test_12_variables(self):
         self.aedtapp["test"] = "1mm"
         val = self.aedtapp["test"]
-        assert val == "1.0mm"
+        assert val == "1mm"
         del self.aedtapp["test"]
         assert "test" not in self.aedtapp.variable_manager.variables
 
@@ -281,3 +282,10 @@ class TestClass(BasisTest, object):
     def test_32_make_read_only_variable(self):
         self.aedtapp["my_read_only_variable"] = "15mm"
         assert self.aedtapp.read_only_variable("my_read_only_variable")
+
+    def test_33_aedt_object(self):
+        aedt_obj = AedtObjects()
+        assert aedt_obj.odesign
+        assert aedt_obj.oproject
+        aedt_obj = AedtObjects(self.aedtapp.oproject, self.aedtapp.odesign)
+        assert aedt_obj.odesign == self.aedtapp.odesign
