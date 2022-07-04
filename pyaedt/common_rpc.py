@@ -513,6 +513,6 @@ def edb_rpc(
             cl = client(server_name=machine, server_port=port, use_aedt_relative_path=use_aedt_relative_path)
             cl.server_pid = proc.pid
     edb = cl.root.edb(edbpath=edbpath, cellname=cellname, isreadonly=isreadonly, edbversion=edbversion, use_ppe=use_ppe)
-    server = CloseServer(cl.server_pid)
+    server = CloseServer(cl.server_pid, cl.client_pid)
     edb.close_session = server.close_session
     return edb
