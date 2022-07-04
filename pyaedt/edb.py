@@ -9,12 +9,12 @@ import logging
 import os
 import re
 import shutil
+import socket
 import sys
 import tempfile
 import time
 import traceback
 import warnings
-
 
 try:
     import clr
@@ -54,6 +54,19 @@ except ImportError:
             "The clr is missing. Install Python.NET or use an IronPython version if you want to use the EDB module."
         )
         edb_initialized = False
+
+
+def _check_grpc_port(port, machine_name=""):
+    s = socket.socket()
+    try:
+        if not machine_name:
+            machine_name = socket.getfqdn()
+        s.connect((machine_name, port))
+    except socket.error:
+        return False
+    else:
+        s.close()
+        return True
 
 
 class Edb(object):
@@ -111,73 +124,105 @@ class Edb(object):
         oproject=None,
         student_version=False,
         use_ppe=False,
+        machine_name="",
+        port=None,
     ):
-        self._clean_variables()
-        if is_ironpython and inside_desktop:
-            self.standalone = False
-        else:
-            self.standalone = True
-        if edb_initialized:
-            self.oproject = oproject
-            self._main = sys.modules["__main__"]
-            if isaedtowned and "aedt_logger" in dir(sys.modules["__main__"]):
-                self._logger = self._main.aedt_logger
-            else:
-                if not edbpath or not os.path.exists(os.path.dirname(edbpath)):
-                    project_dir = tempfile.gettempdir()
-                else:
-                    project_dir = os.path.dirname(edbpath)
-                if settings.logger_file_path:
-                    logfile = settings.logger_file_path
-                else:
-                    logfile = os.path.join(
-                        project_dir, "pyaedt{}.log".format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
-                    )
-                self._logger = AedtLogger(filename=logfile, level=logging.DEBUG)
-                self._logger.info("Logger started on %s", logfile)
-                self._main.aedt_logger = self._logger
+        if port or machine_name:
+            self._clean_variables()
+            from pyaedt.common_rpc import client
 
-            self.student_version = student_version
-            self.logger.info("Logger is initialized in EDB.")
-            self.edbversion = edbversion
-            self.isaedtowned = isaedtowned
-            self._init_dlls()
-            self._db = None
-            # self._edb.Database.SetRunAsStandAlone(not isaedtowned)
-            self.isreadonly = isreadonly
-            self.cellname = cellname
-            if not edbpath:
-                if os.name != "posix":
-                    edbpath = os.getenv("USERPROFILE")
-                    if not edbpath:
-                        edbpath = os.path.expanduser("~")
-                    edbpath = os.path.join(edbpath, "Documents", generate_unique_name("layout") + ".aedb")
-                else:
-                    edbpath = os.getenv("HOME")
-                    if not edbpath:
-                        edbpath = os.path.expanduser("~")
-                    edbpath = os.path.join(edbpath, generate_unique_name("layout") + ".aedb")
-                self.logger.info("No EDB is provided. Creating a new EDB {}.".format(edbpath))
-            self.edbpath = edbpath
-            if isaedtowned and (inside_desktop or settings.remote_api):
-                self.open_edb_inside_aedt()
-            elif edbpath[-3:] in ["brd", "gds", "xml", "dxf", "tgz"]:
-                self.edbpath = edbpath[:-4] + ".aedb"
-                working_dir = os.path.dirname(edbpath)
-                self.import_layout_pcb(edbpath, working_dir, use_ppe=use_ppe)
-                self.logger.info("EDB %s was created correctly from %s file.", self.edbpath, edbpath[-2:])
-            elif not os.path.exists(os.path.join(self.edbpath, "edb.def")):
-                self.create_edb()
-                self.logger.info("EDB %s was created correctly.", self.edbpath)
-            elif ".aedb" in edbpath:
-                self.edbpath = edbpath
-                self.open_edb()
-            if self.builder:
-                self.logger.info("EDB was initialized.")
-            else:
-                self.logger.info("Failed to initialize DLLs.")
+            if not machine_name:
+                machine_name = socket.getfqdn()
+            if not _check_grpc_port(port, machine_name):
+                message = "Error. Rpc server not found on port {} on machine {}.".format(port, machine_name)
+                message += "Use launch_server or launch_ironphython_server."
+                raise Exception(message)
+            my_client = client(server_name=machine_name, server_port=port)
+            edb = my_client.root.edb(
+                edbpath=edbpath, cellname=cellname, isreadonly=isreadonly, edbversion=edbversion, use_ppe=use_ppe
+            )
+            self._active_cell = edb._active_cell
+            self._active_layout = edb._active_layout
+            self._db = edb._db
+            self.edb = edb.edb
+            self._edblib = edb.edblib
+            self.builder = edb.builder
+            self.edbutils = edb.edbutils
+            self._logger = edb._logger
+            self.simSetup = edb.simSetup
+            self.simsetupdata = edb.simsetupdata
+            self.edbpath = edb.edbpath
+            self.standalone = edb.standalone
+            self.cellname = edb.cellname
+            self.edbversion = edb.edbversion
+            self._main = edb._main
         else:
-            warnings.warn("Failed to initialize DLLss")
+            self._clean_variables()
+            if is_ironpython and inside_desktop:
+                self.standalone = False
+            else:
+                self.standalone = True
+            if edb_initialized:
+                self.oproject = oproject
+                self._main = sys.modules["__main__"]
+                if isaedtowned and "aedt_logger" in dir(sys.modules["__main__"]):
+                    self._logger = self._main.aedt_logger
+                else:
+                    if not edbpath or not os.path.exists(os.path.dirname(edbpath)):
+                        project_dir = tempfile.gettempdir()
+                    else:
+                        project_dir = os.path.dirname(edbpath)
+                    if settings.logger_file_path:
+                        logfile = settings.logger_file_path
+                    else:
+                        logfile = os.path.join(
+                            project_dir, "pyaedt{}.log".format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+                        )
+                    self._logger = AedtLogger(filename=logfile, level=logging.DEBUG)
+                    self._logger.info("Logger started on %s", logfile)
+                    self._main.aedt_logger = self._logger
+
+                self.student_version = student_version
+                self.logger.info("Logger is initialized in EDB.")
+                self.edbversion = edbversion
+                self.isaedtowned = isaedtowned
+                self._init_dlls()
+                self._db = None
+                # self._edb.Database.SetRunAsStandAlone(not isaedtowned)
+                self.isreadonly = isreadonly
+                self.cellname = cellname
+                if not edbpath:
+                    if os.name != "posix":
+                        edbpath = os.getenv("USERPROFILE")
+                        if not edbpath:
+                            edbpath = os.path.expanduser("~")
+                        edbpath = os.path.join(edbpath, "Documents", generate_unique_name("layout") + ".aedb")
+                    else:
+                        edbpath = os.getenv("HOME")
+                        if not edbpath:
+                            edbpath = os.path.expanduser("~")
+                        edbpath = os.path.join(edbpath, generate_unique_name("layout") + ".aedb")
+                    self.logger.info("No EDB is provided. Creating a new EDB {}.".format(edbpath))
+                self.edbpath = edbpath
+                if isaedtowned and (inside_desktop or settings.remote_api):
+                    self.open_edb_inside_aedt()
+                elif edbpath[-3:] in ["brd", "gds", "xml", "dxf", "tgz"]:
+                    self.edbpath = edbpath[:-4] + ".aedb"
+                    working_dir = os.path.dirname(edbpath)
+                    self.import_layout_pcb(edbpath, working_dir, use_ppe=use_ppe)
+                    self.logger.info("EDB %s was created correctly from %s file.", self.edbpath, edbpath[-2:])
+                elif not os.path.exists(os.path.join(self.edbpath, "edb.def")):
+                    self.create_edb()
+                    self.logger.info("EDB %s was created correctly.", self.edbpath)
+                elif ".aedb" in edbpath:
+                    self.edbpath = edbpath
+                    self.open_edb()
+                if self.builder:
+                    self.logger.info("EDB was initialized.")
+                else:
+                    self.logger.info("Failed to initialize DLLs.")
+            else:
+                warnings.warn("Failed to initialize DLLss")
 
     def __enter__(self):
         return self

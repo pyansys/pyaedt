@@ -259,7 +259,7 @@ def client(server_name, server_port=18000, beta_options=None, use_aedt_relative_
         return "Error connecting to the server. Check the server name and port and retry."
     print("Connecting to a new session of AEDT on port {}. Wait.".format(port))
     if port:
-        time.sleep(20)
+        time.sleep(2)
         timeout = 80
         while timeout > 0:
             try:
