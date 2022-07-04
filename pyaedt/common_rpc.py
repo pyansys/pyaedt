@@ -453,7 +453,7 @@ def _check_grpc_port(port, machine_name=""):
 class CloseServer:
     def __init__(self, pid, client_pid):
         self.pid = pid
-        self.client_pid = pid
+        self.client_pid = client_pid
 
     def close_session(self, close_server=True):
         """Close actual session.
@@ -468,10 +468,11 @@ class CloseServer:
             os.kill(self.client_pid, 9)
         except OSError:
             pass
-        try:
-            os.kill(self.pid, 9)
-        except OSError:
-            pass
+        if close_server:
+            try:
+                os.kill(self.pid, 9)
+            except OSError:
+                pass
 
 
 def edb_rpc(
@@ -512,6 +513,6 @@ def edb_rpc(
             cl = client(server_name=machine, server_port=port, use_aedt_relative_path=use_aedt_relative_path)
             cl.server_pid = proc.pid
     edb = cl.root.edb(edbpath=edbpath, cellname=cellname, isreadonly=isreadonly, edbversion=edbversion, use_ppe=use_ppe)
-    server = CloseServer(cl.server_pid, cl.client_pid)
+    server = CloseServer(cl.server_pid)
     edb.close_session = server.close_session
     return edb
