@@ -254,7 +254,7 @@ def client(server_name, server_port=18000, beta_options=None, use_aedt_relative_
     if not c:
         print("Failing to connect to {} on port {}. Check the settings".format(server_name, server_port))
         return False
-    port = c.root.start_service(server_name, beta_options, use_aedt_relative_path=use_aedt_relative_path)
+    port, pid = c.root.start_service(server_name, beta_options, use_aedt_relative_path=use_aedt_relative_path)
     if not port:
         return "Error connecting to the server. Check the server name and port and retry."
     print("Connecting to a new session of AEDT on port {}. Wait.".format(port))
@@ -266,6 +266,7 @@ def client(server_name, server_port=18000, beta_options=None, use_aedt_relative_
                 c1 = rpyc.connect(server_name, port, config={"sync_request_timeout": None})
                 c1.convert_remote_object = convert_remote_object
                 if c1:
+                    c1.client_pid = pid
                     if beta_options:
                         c1._beta_options = beta_options
                     return c1
@@ -450,11 +451,27 @@ def _check_grpc_port(port, machine_name=""):
 
 
 class CloseServer:
-    def __init__(self, pid):
+    def __init__(self, pid, client_pid):
         self.pid = pid
+        self.client_pid = pid
 
-    def close_server(self):
-        os.kill(self.pid, 9)
+    def close_session(self, close_server=True):
+        """Close actual session.
+
+        Parameters
+        ----------
+        close_server : bool
+            Either if close the global server or not.
+
+        """
+        try:
+            os.kill(self.client_pid, 9)
+        except OSError:
+            pass
+        try:
+            os.kill(self.pid, 9)
+        except OSError:
+            pass
 
 
 def edb_rpc(
@@ -493,8 +510,8 @@ def edb_rpc(
             print("Process {} started on {}".format(proc.pid, socket.getfqdn()))
             print("Using port {}".format(port))
             cl = client(server_name=machine, server_port=port, use_aedt_relative_path=use_aedt_relative_path)
-            # cl.server_pid = proc.pid
+            cl.server_pid = proc.pid
     edb = cl.root.edb(edbpath=edbpath, cellname=cellname, isreadonly=isreadonly, edbversion=edbversion, use_ppe=use_ppe)
-    server = CloseServer(cl.server_pid)
-    edb.close_server = server.close_server
+    server = CloseServer(cl.server_pid, cl.client_pid)
+    edb.close_session = server.close_session
     return edb

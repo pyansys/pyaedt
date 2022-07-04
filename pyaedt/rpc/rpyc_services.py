@@ -828,8 +828,8 @@ class GlobalService(rpyc.Service):
                                 ng_feature += "," + beta_options[option]
                     command = [aedt_exe, ng_feature, "-RunScriptAndExit", dest_file]
                 print(command)
-                subprocess.Popen(command)
-                return port
+                p = subprocess.Popen(command)
+                return port, p.pid
             else:
                 return "Error. Ansys EM Path has to be provided"
 
@@ -857,7 +857,7 @@ class GlobalService(rpyc.Service):
             p = subprocess.Popen(" ".join(cmd_service))
             self._processes[port] = p
         print("Service Started on Port {}".format(port))
-        return port
+        return port, p.pid
 
     def exposed_stop_service(self, port_number):
         """Stops a given Pyaedt Service on specified port.
