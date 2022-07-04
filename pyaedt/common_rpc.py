@@ -445,6 +445,15 @@ def _check_grpc_port(port, machine_name=""):
         return True
 
 
+def close_server(server_name="", port=18000):
+    """close RPC Server."""
+    if not server_name:
+        server_name = socket.getfqdn()
+    cl = rpyc.connect(server_name, port, config={"sync_request_timeout": None})
+    cl.close()
+    return True
+
+
 def edb_rpc(
     edbpath=None,
     cellname=None,
@@ -482,4 +491,5 @@ def edb_rpc(
             print("Using port {}".format(port))
             cl = client(server_name=machine, server_port=port, use_aedt_relative_path=use_aedt_relative_path)
     edb = cl.root.edb(edbpath=edbpath, cellname=cellname, isreadonly=isreadonly, edbversion=edbversion, use_ppe=use_ppe)
+    edb.close_server = close_server
     return edb
