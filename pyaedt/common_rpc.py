@@ -429,7 +429,7 @@ def launch_ironpython_server(
     print("For these known issues, using the method client.convert_remote_object is recommended.")
     if proc and launch_client:
         cl = client(server_name=socket.getfqdn(), server_port=port1, use_aedt_relative_path=use_aedt_relative_path)
-        # cl.server_pid = proc.pid
+        cl.server_pid = proc.pid
         return cl
     elif proc:
         return proc.pid
@@ -449,12 +449,12 @@ def _check_grpc_port(port, machine_name=""):
         return True
 
 
-# class CloseServer:
-#     def __init__(self, pid):
-#         self.pid = pid
-#
-#     def close_server(self):
-#         os.kill(self.pid)
+class CloseServer:
+    def __init__(self, pid):
+        self.pid = pid
+
+    def close_server(self):
+        os.kill(self.pid)
 
 
 def edb_rpc(
@@ -495,6 +495,6 @@ def edb_rpc(
             cl = client(server_name=machine, server_port=port, use_aedt_relative_path=use_aedt_relative_path)
             # cl.server_pid = proc.pid
     edb = cl.root.edb(edbpath=edbpath, cellname=cellname, isreadonly=isreadonly, edbversion=edbversion, use_ppe=use_ppe)
-    # server = CloseServer(cl.server_pid)
+    server = CloseServer(cl.server_pid)
     edb.close_server = server.close_server
     return edb
