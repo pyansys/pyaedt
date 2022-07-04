@@ -414,9 +414,9 @@ def launch_ironpython_server(
         os.path.join(aedt_path, "common", "mono", "Linux64", "bin", "mono"),
         os.path.join(aedt_path, "common", "IronPython", "ipy64.exe"),
         os.path.join(os.path.dirname(__file__), "rpc", "local_server.py"),
-        aedt_path,
         str(val),
         str(port1),
+        aedt_path,
     ]
     if not os.path.exists(os.path.join(aedt_path, "common", "IronPython", "ipy64.exe")):
         print("Check the aedt_path and retry.")
@@ -430,3 +430,56 @@ def launch_ironpython_server(
     if proc and launch_client:
         return client(server_name=socket.getfqdn(), server_port=port1, use_aedt_relative_path=use_aedt_relative_path)
     return False
+
+
+def _check_grpc_port(port, machine_name=""):
+    s = socket.socket()
+    try:
+        if not machine_name:
+            machine_name = socket.getfqdn()
+        s.connect((machine_name, port))
+    except socket.error:
+        return False
+    else:
+        s.close()
+        return True
+
+
+def edb_rpc(
+    edbpath=None,
+    cellname=None,
+    isreadonly=False,
+    edbversion="2022.2",
+    use_ppe=True,
+    aedt_path=None,
+    machine="",
+    port=18000,
+    use_aedt_relative_path=False,
+):
+    if not machine:
+        machine = socket.getfqdn()
+    if _check_grpc_port(port, machine):
+        cl = client(server_name=machine, server_port=port, use_aedt_relative_path=use_aedt_relative_path)
+    elif machine == socket.getfqdn():
+        if os.name == "posix":
+            cl = launch_ironpython_server(
+                aedt_path=aedt_path,
+                port=port,
+                non_graphical=True,
+                launch_client=True,
+                use_aedt_relative_path=use_aedt_relative_path,
+            )
+        else:
+            val = 1
+            command = [
+                "python",
+                os.path.join(os.path.dirname(__file__), "rpc", "local_server.py"),
+                str(val),
+                str(port),
+            ]
+            proc = subprocess.Popen(" ".join(command), shell=True)
+            print("Process {} started on {}".format(proc.pid, socket.getfqdn()))
+            print("Using port {}".format(port))
+            cl = client(server_name=machine, server_port=port, use_aedt_relative_path=use_aedt_relative_path)
+    edb = cl.root.edb(edbpath=edbpath, cellname=cellname, isreadonly=isreadonly, edbversion=edbversion, use_ppe=use_ppe)
+    return edb
