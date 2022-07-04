@@ -454,7 +454,7 @@ class CloseServer:
         self.pid = pid
 
     def close_server(self):
-        os.kill(self.pid)
+        os.kill(self.pid, 9)
 
 
 def edb_rpc(
