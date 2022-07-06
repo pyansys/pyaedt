@@ -4920,3 +4920,186 @@ class EDBStatistics(object):
     def num_resistors(self, value):
         if isinstance(value, int):
             self._nb_resistors = value
+
+
+class IPC2581(object):
+    def __init__(self):
+        self._revision = "C"
+        self._units = self.Units().Inch
+        self._content = self.Content()
+
+    @property
+    def units(self):
+        return self.units
+
+    @units.setter
+    def units(self, value):
+        if isinstance(value, int):
+            self._units = value
+
+    class Units(object):
+        (Inch, MM) = range(1,2)
+
+    class Content(object):
+        def __init__(self):
+            self._mode = self.Mode().Stackup
+            self._design_units = IPC2581.units
+            self._role_ref = "Owner"
+            self._function_mode = self.Mode().Stackup
+            self._step_ref = "Ansys_IPC2581"
+            self._layer_ref = self.LayerRef()
+            self._dict_colors = self.DictionaryColor()
+            self._dict_path_width = self.PathWidthDictionary()
+            self._standard_geometries_dict =
+
+        class Mode(object):
+            (Stackup) = range(1)
+
+        class LayerRef(object):
+            def __init__(self):
+                self._name = ""
+
+        class DictionaryColor(object):
+            def __init__(self):
+                self._dict_colors = []
+
+            @property
+            def dict_colors(self):
+                return self._dict_colors
+
+            @dict_colors.setter
+            def dict_colors(self, value):
+                if isinstance(value, list):
+                    self._dict_colors = value
+
+            def add_color(self, value):
+                if isinstance(value, self.EntryColor):
+                    self._dict_colors.append(value)
+
+            class EntryColor(object):
+                def __init__(self):
+                    self.name = ""
+                    self.color = self.Color()
+
+                class Color(object):
+                    def __init__(self):
+                        self._r = 0
+                        self._g = 0
+                        self._b = 0
+
+                    @property
+                    def r(self):
+                        return self._r
+
+                    @r.setter
+                    def r(self, value):
+                        if isinstance(value, int):
+                            self._r = value
+
+                    @property
+                    def g(self):
+                        return self._g
+
+                    @g.setter
+                    def g(self, value):
+                        if isinstance(value, int):
+                            self._g = value
+
+                    @property
+                    def b(self):
+                        return self._b
+
+                    @b.setter
+                    def b(self, value):
+                        if isinstance(value, int):
+                            self._b = value
+
+        class PathWidthDictionary(object):
+            def __init__(self):
+                self.units = IPC2581.units
+                self.path_width_dict = {}
+
+        class StandardGeometriesDictionary(object):
+            def __init__(self):
+                self.units = IPC2581.units
+                self.standard_circ_dict = {}
+                self.standard_rect_dict = {}
+                self.standard_oval_dict = {}
+                self.user_defined_dict = {}
+
+        class Rectangle(object):
+            def __init__(self):
+                self.name = ""
+                self.width = 0.0
+                self.height = 0.0
+                self.filling_type = IPC2581.Content.FillType().Solid
+
+        class FillType(object):
+            (Solid) = range(1)
+
+class IPC2581Primitives(object):
+    def __init__(self):
+        pass
+
+    class Path(object):
+        def __init__(self):
+            self.location_x = 0.0
+            self.location_y = 0.0
+            self.polyline = []
+            self.line_width = ""
+            self.width_ref_id = ""
+
+        def add_poly_step(self, poly_step=None):
+            if not isinstance(poly_step, IPC2581Primitives.PolyStep):
+                return False
+            self.polyline.append(poly_step)
+
+    class PathStep(object):
+        def __init__(self):
+            self.x = 0.0
+            self.y = 0.0
+
+    class Polygon(object):
+        def __init__(self):
+            self.is_void = False
+            self.poly_steps = []
+            self.solid_fill_id = ""
+
+        def add_poly_step(self, poly_step=None):
+            if not isinstance(poly_step, IPC2581Primitives.PolyStep):
+                return False
+            self.poly_steps.append(poly_step)
+
+    class Cutout(Polygon):
+        def __init__(self):
+            IPC2581Primitives.Polygon.__init__(self)
+
+    class PolyStep(object):
+        def __init__(self):
+            self.poly_type = IPC2581Primitives.PolyType().Segment
+            self.x = 0.0
+            self.y = 0.0
+            self.center_X = 0.0
+            self.center_y = 0.0
+            self.clock_wise = False
+
+    class PolyType(object):
+        (Segment, Curve) = range(1,2)
+
+    class Curve(object):
+        def __init__(self):
+            self.center_X = 0.0
+            self.center_y = 0.0
+            self.clock_wise = False
+
+    class Arc(object):
+
+        @staticmethod
+        def get_arc_radius_angle(h, c):
+            if not isinstance(h, float) and isinstance(c, float):
+                return False
+            r = h / 2 + math.pow(c, 2) / (8 * h)
+            theta = 2 * math.asin(c / (2 * r))
+            return r, theta
+
+
