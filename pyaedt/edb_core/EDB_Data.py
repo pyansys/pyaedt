@@ -4922,110 +4922,20 @@ class EDBStatistics(object):
             self._nb_resistors = value
 
 
-class IPC2581(object):
-    def __init__(self):
-        self._revision = "C"
-        self._units = self.Units().Inch
-        self._content = self.Content()
 
-    @property
-    def units(self):
-        return self.units
 
-    @units.setter
-    def units(self, value):
-        if isinstance(value, int):
-            self._units = value
 
-    class Units(object):
-        (Inch, MM) = range(1,2)
 
-    class Content(object):
-        def __init__(self):
-            self._mode = self.Mode().Stackup
-            self._design_units = IPC2581.units
-            self._role_ref = "Owner"
-            self._function_mode = self.Mode().Stackup
-            self._step_ref = "Ansys_IPC2581"
-            self._layer_ref = self.LayerRef()
-            self._dict_colors = self.DictionaryColor()
-            self._dict_path_width = self.PathWidthDictionary()
-            self._standard_geometries_dict =
 
-        class Mode(object):
-            (Stackup) = range(1)
 
-        class LayerRef(object):
-            def __init__(self):
-                self._name = ""
 
-        class DictionaryColor(object):
-            def __init__(self):
-                self._dict_colors = []
 
-            @property
-            def dict_colors(self):
-                return self._dict_colors
 
-            @dict_colors.setter
-            def dict_colors(self, value):
-                if isinstance(value, list):
-                    self._dict_colors = value
 
-            def add_color(self, value):
-                if isinstance(value, self.EntryColor):
-                    self._dict_colors.append(value)
 
-            class EntryColor(object):
-                def __init__(self):
-                    self.name = ""
-                    self.color = self.Color()
 
-                class Color(object):
-                    def __init__(self):
-                        self._r = 0
-                        self._g = 0
-                        self._b = 0
 
-                    @property
-                    def r(self):
-                        return self._r
 
-                    @r.setter
-                    def r(self, value):
-                        if isinstance(value, int):
-                            self._r = value
-
-                    @property
-                    def g(self):
-                        return self._g
-
-                    @g.setter
-                    def g(self, value):
-                        if isinstance(value, int):
-                            self._g = value
-
-                    @property
-                    def b(self):
-                        return self._b
-
-                    @b.setter
-                    def b(self, value):
-                        if isinstance(value, int):
-                            self._b = value
-
-        class PathWidthDictionary(object):
-            def __init__(self):
-                self.units = IPC2581.units
-                self.path_width_dict = {}
-
-        class StandardGeometriesDictionary(object):
-            def __init__(self):
-                self.units = IPC2581.units
-                self.standard_circ_dict = {}
-                self.standard_rect_dict = {}
-                self.standard_oval_dict = {}
-                self.user_defined_dict = {}
 
         class Rectangle(object):
             def __init__(self):
@@ -5033,6 +4943,19 @@ class IPC2581(object):
                 self.width = 0.0
                 self.height = 0.0
                 self.filling_type = IPC2581.Content.FillType().Solid
+
+        class Circle(object):
+            def __init__(self):
+                self.name = ""
+                self.diameter = 0.0
+                self.fill_type = IPC2581.Content.FillType().Solid
+
+        class Oval(object):
+            def __init__(self):
+                self.name = ""
+                self.width = 0.0
+                self.height = 0.0
+                self.fill_type = IPC2581.Content.FillType().Solid
 
         class FillType(object):
             (Solid) = range(1)
