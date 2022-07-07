@@ -5,6 +5,10 @@ import time
 from pyaedt import Edb
 from pyaedt.edb_core.components import resistor_value_parser
 from pyaedt.edb_core.EDB_Data import SimulationConfiguration
+from pyaedt.edb_core.EDB_Data import Source
+from pyaedt.generic.constants import RadiationBoxType
+from pyaedt.generic.constants import SolverType
+from pyaedt.generic.constants import SourceType
 
 # Setup paths for module imports
 # Import required modules
@@ -161,6 +165,12 @@ if not config["skip_edb"]:
             assert not signalnets[list(signalnets.keys())[0]].is_power_ground
             assert not signalnets[list(signalnets.keys())[0]].IsPowerGround()
             assert len(list(signalnets[list(signalnets.keys())[0]].primitives)) > 0
+
+            assert self.edbapp.core_nets.find_or_create_net("GND")
+            assert self.edbapp.core_nets.find_or_create_net(start_with="gn")
+            assert self.edbapp.core_nets.find_or_create_net(start_with="g", end_with="d")
+            assert self.edbapp.core_nets.find_or_create_net(end_with="d")
+            assert self.edbapp.core_nets.find_or_create_net(contain="usb")
 
         def test_09_assign_rlc(self):
             assert self.edbapp.core_components.set_component_rlc(
@@ -579,6 +589,7 @@ if not config["skip_edb"]:
             ]
             path = self.edbapp.core_primitives.Shape("polygon", points=points)
             assert self.edbapp.core_primitives.create_path(path, "TOP")
+            assert self.edbapp.core_primitives.create_trace(points, "TOP")
 
         def test_60_create_outline(self):
             assert self.edbapp.core_stackup.stackup_layers.add_outline_layer("Outline1")
@@ -1142,26 +1153,18 @@ if not config["skip_edb"]:
                 laminateEdb.close_edb()
 
         def test_83_build_siwave_project_from_config_file(self):
-            cfg_file = os.path.join(os.path.dirname(self.edbapp.edbpath), "test.cfg")
+            example_project = os.path.join(local_path, "example_models", "Galileo.aedb")
+            self.target_path = os.path.join(self.local_scratch.path, "Galileo.aedb")
+            self.local_scratch.copyfolder(example_project, self.target_path)
+            cfg_file = os.path.join(self.target_path, "test.cfg")
             with open(cfg_file, "w") as f:
                 f.writelines("SolverType = 'Siwave'\n")
                 f.writelines("PowerNets = ['GND']\n")
                 f.writelines("Components = ['U2A5', 'U1B5']")
-
             sim_config = SimulationConfiguration(cfg_file)
-            assert self.edbapp.build_simulation_project(sim_config)
+            assert Edb(self.target_path).build_simulation_project(sim_config)
 
-        def test_84_build_hfss_project_from_config_file(self):
-            cfg_file = os.path.join(os.path.dirname(self.edbapp.edbpath), "test.cfg")
-            with open(cfg_file, "w") as f:
-                f.writelines("SolverType = 'Hfss3dLayout'\n")
-                f.writelines("PowerNets = ['GND']\n")
-                f.writelines("Components = ['U2A5', 'U1B5']")
-
-            sim_config = SimulationConfiguration(cfg_file)
-            assert self.edbapp.build_simulation_project(sim_config)
-
-        def test_85_set_component_type(self):
+        def test_84_set_component_type(self):
             comp = self.edbapp.core_components.components["R2L18"]
             comp.type = "Resistor"
             assert comp.type == "Resistor"
@@ -1362,6 +1365,20 @@ if not config["skip_edb"]:
             outline_layer = stackup._layer_types_to_int(stackup.layer_types.OutlineLayer)
             assert outline_layer == 18
 
+        def test_98_export_import_json_for_config(self):
+            sim_config = SimulationConfiguration()
+            assert sim_config.output_aedb is None
+            sim_config.output_aedb = os.path.join(self.local_scratch.path, "test.aedb")
+            assert sim_config.output_aedb == os.path.join(self.local_scratch.path, "test.aedb")
+            json_file = os.path.join(self.local_scratch.path, "test.json")
+            sim_config._filename = json_file
+            sim_config.arc_angle = "90deg"
+            assert sim_config.export_json(json_file)
+            test_import = SimulationConfiguration()
+            assert test_import.import_json(json_file)
+            assert test_import.arc_angle == "90deg"
+            assert test_import._filename == json_file
+
         def test_99_duplicate_material(self):
             stack_up = self.edbapp.core_stackup
             duplicated_copper = stack_up.duplicate_material("copper", "my_new_copper")
@@ -1388,7 +1405,7 @@ if not config["skip_edb"]:
             non_duplicated = stack_up.duplicate_material("my_nonexistent_mat", "nothing")
             assert not non_duplicated
 
-        def test_100_get_property_by_material_name(self):
+        def test_A100_get_property_by_material_name(self):
             stack_up = self.edbapp.core_stackup
             permittivity = stack_up.get_property_by_material_name("permittivity", "FR4_epoxy")
             permeability = stack_up.get_property_by_material_name("permeability", "FR4_epoxy")
@@ -1405,22 +1422,240 @@ if not config["skip_edb"]:
             failing_test_2 = stack_up.get_property_by_material_name("none_property", "copper")
             assert not failing_test_2
 
-        def test_98_export_import_json_for_config(self):
-            sim_config = SimulationConfiguration()
-            assert sim_config.output_aedb is None
-            sim_config.output_aedb = os.path.join(self.local_scratch.path, "test.aedb")
-            assert sim_config.output_aedb == os.path.join(self.local_scratch.path, "test.aedb")
-            json_file = os.path.join(self.local_scratch.path, "test.json")
-            sim_config._filename = json_file
-            sim_config.arc_angle = "90deg"
-            assert sim_config.export_json(json_file)
-            test_import = SimulationConfiguration()
-            assert test_import.import_json(json_file)
-            assert test_import.arc_angle == "90deg"
-            assert test_import._filename == json_file
-
-        def test_99_classify_nets(self):
+        def test_A101_classify_nets(self):
             sim_setup = SimulationConfiguration()
             sim_setup.power_nets = ["RSVD_0", "RSVD_1"]
             sim_setup.signal_nets = ["V3P3_S0"]
             self.edbapp.core_nets.classify_nets(sim_setup)
+
+        def test_A102_place_a3dcomp_3d_placement(self):
+            source_path = os.path.join(local_path, "example_models", "lam_for_bottom_place.aedb")
+            target_path = os.path.join(self.local_scratch.path, "output.aedb")
+            self.local_scratch.copyfolder(source_path, target_path)
+            laminate_edb = Edb(target_path, edbversion=desktop_version)
+            chip_a3dcomp = os.path.join(local_path, "example_models", "chip.a3dcomp")
+            try:
+                layout = laminate_edb.active_layout
+                cell_instances = list(layout.CellInstances)
+                assert len(cell_instances) == 0
+                assert laminate_edb.core_stackup.place_a3dcomp_3d_placement(
+                    chip_a3dcomp, angle=0.0, offset_x=0.0, offset_y=0.0, place_on_top=True
+                )
+                cell_instances = list(layout.CellInstances)
+                assert len(cell_instances) == 1
+                cell_instance = cell_instances[0]
+                assert cell_instance.Is3DPlacement()
+                if is_ironpython:
+                    (
+                        res,
+                        local_origin,
+                        rotation_axis_from,
+                        rotation_axis_to,
+                        angle,
+                        loc,
+                    ) = cell_instance.Get3DTransformation()
+                else:
+                    (
+                        res,
+                        local_origin,
+                        rotation_axis_from,
+                        rotation_axis_to,
+                        angle,
+                        loc,
+                    ) = cell_instance.Get3DTransformation(None, None, None, None, None)
+                assert res
+                zero_value = laminate_edb.edb_value(0)
+                one_value = laminate_edb.edb_value(1)
+                origin_point = laminate_edb.edb.Geometry.Point3DData(zero_value, zero_value, zero_value)
+                x_axis_point = laminate_edb.edb.Geometry.Point3DData(one_value, zero_value, zero_value)
+                assert local_origin.IsEqual(origin_point)
+                assert rotation_axis_from.IsEqual(x_axis_point)
+                assert rotation_axis_to.IsEqual(x_axis_point)
+                assert angle.IsEqual(zero_value)
+                assert loc.IsEqual(
+                    laminate_edb.edb.Geometry.Point3DData(zero_value, zero_value, laminate_edb.edb_value(170e-6))
+                )
+                assert laminate_edb.save_edb()
+            finally:
+                laminate_edb.close_edb()
+
+        def test_A02b_place_a3dcomp_3d_placement_on_bottom(self):
+            source_path = os.path.join(local_path, "example_models", "lam_for_bottom_place.aedb")
+            target_path = os.path.join(self.local_scratch.path, "output.aedb")
+            self.local_scratch.copyfolder(source_path, target_path)
+            laminate_edb = Edb(target_path, edbversion=desktop_version)
+            chip_a3dcomp = os.path.join(local_path, "example_models", "chip.a3dcomp")
+            try:
+                layout = laminate_edb.active_layout
+                cell_instances = list(layout.CellInstances)
+                assert len(cell_instances) == 0
+                assert laminate_edb.core_stackup.place_a3dcomp_3d_placement(
+                    chip_a3dcomp, angle=90.0, offset_x=0.5e-3, offset_y=-0.5e-3, place_on_top=False
+                )
+                cell_instances = list(layout.CellInstances)
+                assert len(cell_instances) == 1
+                cell_instance = cell_instances[0]
+                assert cell_instance.Is3DPlacement()
+                if is_ironpython:
+                    (
+                        res,
+                        local_origin,
+                        rotation_axis_from,
+                        rotation_axis_to,
+                        angle,
+                        loc,
+                    ) = cell_instance.Get3DTransformation()
+                else:
+                    (
+                        res,
+                        local_origin,
+                        rotation_axis_from,
+                        rotation_axis_to,
+                        angle,
+                        loc,
+                    ) = cell_instance.Get3DTransformation(None, None, None, None, None)
+                assert res
+                zero_value = laminate_edb.edb_value(0)
+                one_value = laminate_edb.edb_value(1)
+                flip_angle_value = laminate_edb.edb_value("180deg")
+                origin_point = laminate_edb.edb.Geometry.Point3DData(zero_value, zero_value, zero_value)
+                x_axis_point = laminate_edb.edb.Geometry.Point3DData(one_value, zero_value, zero_value)
+                assert local_origin.IsEqual(origin_point)
+                assert rotation_axis_from.IsEqual(x_axis_point)
+                assert rotation_axis_to.IsEqual(
+                    laminate_edb.edb.Geometry.Point3DData(zero_value, laminate_edb.edb_value(-1.0), zero_value)
+                )
+                assert angle.IsEqual(flip_angle_value)
+                assert loc.IsEqual(
+                    laminate_edb.edb.Geometry.Point3DData(
+                        laminate_edb.edb_value(0.5e-3), laminate_edb.edb_value(-0.5e-3), zero_value
+                    )
+                )
+                assert laminate_edb.save_edb()
+            finally:
+                laminate_edb.close_edb()
+
+        def test_A103_create_edge_ports(self):
+            edb = Edb(edbpath=os.path.join(local_path, "example_models", "edge_ports.aedb"), edbversion=desktop_version)
+            poly_list = [poly for poly in list(edb.active_layout.Primitives) if int(poly.GetPrimitiveType()) == 2]
+            port_poly = [poly for poly in poly_list if poly.GetId() == 17][0]
+            ref_poly = [poly for poly in poly_list if poly.GetId() == 19][0]
+            port_location = [-65e-3, -13e-3]
+            ref_location = [-63e-3, -13e-3]
+            assert edb.core_hfss.create_edge_port_on_polygon(
+                polygon=port_poly,
+                reference_polygon=ref_poly,
+                terminal_point=port_location,
+                reference_point=ref_location,
+            )
+            port_poly = [poly for poly in poly_list if poly.GetId() == 23][0]
+            ref_poly = [poly for poly in poly_list if poly.GetId() == 22][0]
+            port_location = [-65e-3, -10e-3]
+            ref_location = [-65e-3, -10e-3]
+            assert edb.core_hfss.create_edge_port_on_polygon(
+                polygon=port_poly,
+                reference_polygon=ref_poly,
+                terminal_point=port_location,
+                reference_point=ref_location,
+            )
+            port_poly = [poly for poly in poly_list if poly.GetId() == 25][0]
+            port_location = [-65e-3, -7e-3]
+            assert edb.core_hfss.create_edge_port_on_polygon(
+                polygon=port_poly, terminal_point=port_location, reference_layer="gnd"
+            )
+            edb.close_edb()
+
+        def test_A104_create_dc_simulation(self):
+            edb = Edb(edbpath=os.path.join(local_path, "example_models", "dc_flow.aedb"), edbversion=desktop_version)
+            sim_setup = SimulationConfiguration()
+            sim_setup.do_cutout_subdesign = False
+            sim_setup.solver_type = SolverType.SiwaveDC
+            sim_setup.add_dc_source(
+                source_type=SourceType.Vsource,
+                positive_node_component="Q3",
+                positive_node_net="SOURCE_HBA_PHASEA",
+                negative_node_component="Q3",
+                negative_node_net="HV_DC+",
+            )
+            sim_setup.add_dc_source(
+                source_type=SourceType.Isource,
+                positive_node_component="Q5",
+                positive_node_net="SOURCE_HBB_PHASEB",
+                negative_node_component="Q5",
+                negative_node_net="HV_DC+",
+            )
+            edb.build_simulation_project(sim_setup)
+            edb.close_edb()
+
+        def test_A105_add_soure(self):
+            example_project = os.path.join(local_path, "example_models", "Galileo.aedb")
+            self.target_path = os.path.join(self.local_scratch.path, "test_create_source", "Galileo.aedb")
+            self.local_scratch.copyfolder(example_project, self.target_path)
+            src = Source()
+            src.source_type = SourceType.Vsource
+            sim_config = SimulationConfiguration()
+            sim_config.add_dc_source(
+                source_type=SourceType.Vsource,
+                positive_node_component="U2A5",
+                positive_node_net="V3P3_S0",
+                negative_node_component="U2A5",
+                negative_node_net="GND",
+            )
+            sim_config.add_dc_source(
+                source_type=SourceType.Isource,
+                positive_node_component="U2A5",
+                positive_node_net="V1P5_S0",
+                negative_node_component="U2A5",
+                negative_node_net="GND",
+            )
+            assert Edb(self.target_path).build_simulation_project(sim_config)
+
+        def test_106_layout_tchickness(self):
+            assert self.edbapp.core_stackup.get_layout_thickness()
+
+        def test_107_get_layout_stats(self):
+            assert self.edbapp.get_statistics()
+
+        def test_110_edb_stats(self):
+            example_project = os.path.join(local_path, "example_models", "Galileo.aedb")
+            target_path = os.path.join(self.local_scratch.path, "Galileo_110.aedb")
+            self.local_scratch.copyfolder(example_project, target_path)
+            edb = Edb(target_path, edbversion=desktop_version)
+            edb_stats = edb.get_statistics(compute_area=True)
+            assert edb_stats
+            assert edb_stats.num_layers
+            assert edb_stats.stackup_thickness
+            assert edb_stats.num_vias
+            assert edb_stats.occupying_ratio
+            assert edb_stats.occupying_surface
+            assert edb_stats.layout_size
+            assert edb_stats.num_polygons
+            assert edb_stats.num_traces
+            assert edb_stats.num_nets
+            assert edb_stats.num_discrete_components
+            assert edb_stats.num_inductors
+            assert edb_stats.num_capacitors
+            assert edb_stats.num_resistors
+
+        def test_Z_build_hfss_project_from_config_file(self):
+            cfg_file = os.path.join(os.path.dirname(self.edbapp.edbpath), "test.cfg")
+            with open(cfg_file, "w") as f:
+                f.writelines("SolverType = 'Hfss3dLayout'\n")
+                f.writelines("PowerNets = ['GND']\n")
+                f.writelines("Components = ['U2A5', 'U1B5']")
+
+            sim_config = SimulationConfiguration(cfg_file)
+            assert self.edbapp.build_simulation_project(sim_config)
+
+        def test_107_set_bounding_box_extent(self):
+            source_path = os.path.join(local_path, "example_models", "test_107.aedb")
+            target_path = os.path.join(self.local_scratch.path, "test_107.aedb")
+            self.local_scratch.copyfolder(source_path, target_path)
+            edb = Edb(target_path)
+            initial_extent_info = edb.active_cell.GetHFSSExtentInfo()
+            assert initial_extent_info.ExtentType == edb.edb.Utility.HFSSExtentInfoType.Conforming
+            config = SimulationConfiguration()
+            config.radiation_box = RadiationBoxType.BoundingBox
+            assert edb.core_hfss.configure_hfss_extents(config)
+            final_extent_info = edb.active_cell.GetHFSSExtentInfo()
+            assert final_extent_info.ExtentType == edb.edb.Utility.HFSSExtentInfoType.BoundingBox

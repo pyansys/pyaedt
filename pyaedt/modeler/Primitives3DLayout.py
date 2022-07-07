@@ -16,17 +16,6 @@ from pyaedt.modeler.object3dlayout import Polygons3DLayout
 from pyaedt.modeler.object3dlayout import Rect3dLayout
 from pyaedt.modeler.Primitives import default_materials
 
-# import pkgutil
-# modules = [tup[1] for tup in pkgutil.iter_modules()]
-# if "clr" in modules or is_ironpython:
-# try:
-#     import clr
-#     from System import String
-#     import System
-# except ImportError:
-#     if os.name != "posix":
-#         warnings.warn("Pythonnet has to be installed to run Pyaedt")
-
 
 class Primitives3DLayout(object):
     """Manages primitives in HFSS 3D Layout.
@@ -163,6 +152,82 @@ class Primitives3DLayout(object):
         for k, v in self.circles_voids.items():
             geom[k] = v
         return geom
+
+    @pyaedt_function_handler()
+    def objects_by_layer(self, layer_name, object_filter=None, include_voids=False):
+        """Retrieve the list of objects that belongs to a specific layer.
+
+        Parameters
+        ----------
+        layer_name : str
+            Name of the layer to filter.
+        object_filter : str, list, optional
+            Name of the category to include in search. Options are `"poly"`, `"circle"`,
+            `"rect"`,`"line"`,`"arc"`, `"via"`,`"pin"` and `"component"`.
+        include_voids : bool, optional
+            Either if include or not the voids in search.
+
+        Returns
+        -------
+        list
+            Objects found.
+        """
+
+        objs = []
+        if object_filter:
+            if isinstance(object_filter, str):
+                object_filter = [object_filter]
+
+            for poly in object_filter:
+                objs = self.modeler.oeditor.FilterObjectList(
+                    "Type", poly, self.modeler.oeditor.FindObjects("Layer", layer_name)
+                )
+                if include_voids:
+                    objs = self.modeler.oeditor.FilterObjectList(
+                        "Type", poly + " void", self.modeler.oeditor.FindObjects("Layer", layer_name)
+                    )
+
+        else:
+            objs = self.modeler.oeditor.FindObjects("Layer", layer_name)
+        return objs
+
+    @pyaedt_function_handler()
+    def objects_by_net(self, net_name, object_filter=None, include_voids=False):
+        """Retrieve the list of objects that belongs to a specific net.
+
+        Parameters
+        ----------
+        net_name : str
+            Name of the net to filter.
+        object_filter : str, list, optional
+            Name of the category to include in search. Options are `"poly"`, `"circle"`,
+            `"rect"`,`"line"`,`"arc"`, `"via"`,`"pin"` and `"component"`.
+        include_voids : bool, optional
+            Either if include or not the voids in search.
+
+        Returns
+        -------
+        list
+            Objects found.
+        """
+
+        objs = []
+        if object_filter:
+            if isinstance(object_filter, str):
+                object_filter = [object_filter]
+
+            for poly in object_filter:
+                objs = self.modeler.oeditor.FilterObjectList(
+                    "Type", poly, self.modeler.oeditor.FindObjects("Net", net_name)
+                )
+                if include_voids:
+                    objs = self.modeler.oeditor.FilterObjectList(
+                        "Type", poly + " void", self.modeler.oeditor.FindObjects("Net", net_name)
+                    )
+
+        else:
+            objs = self.modeler.oeditor.FindObjects("Net", net_name)
+        return objs
 
     @property
     def polygons(self):

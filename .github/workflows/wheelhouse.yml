@@ -19,16 +19,19 @@ on:
      - 'v*'
      - v*
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
   build:
     # The type of runner that the job will run on
-    runs-on: Windows
+    runs-on: [Windows, pyaedt]
     strategy:
       matrix:
-        python-version: [ 3.7, 3.8, 3.9]
+        python-version: [ 3.7, 3.8, 3.9, '3.10']
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - uses: actions/checkout@v2
@@ -61,11 +64,6 @@ jobs:
           pip install wheel setuptools -U
           pip wheel . -w wheelhouse
 
-      - name: Copy Pythonnet
-        if: matrix.python-version == 3.9
-        run: |    
-            Copy-Item -Path "pythonnet-2.5.2-cp39-cp39-win_amd64.whl" -Destination "wheelhouse" -Force
-
       - name: Zip wheelhouse
         uses: vimtor/action-zip@v1
         with:
@@ -85,5 +83,4 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            ./**/*.tar.gz
             ${{ env.PACKAGE_NAME }}-v${{ steps.version.outputs.PYAEDT_VERSION }}-wheelhouse-${{ runner.os }}-${{ matrix.python-version }}.zip

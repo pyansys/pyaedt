@@ -9,6 +9,7 @@ import warnings
 from pyaedt import _retry_ntimes
 from pyaedt import generate_unique_name
 from pyaedt.edb_core.EDB_Data import EDBComponent
+from pyaedt.edb_core.EDB_Data import Source
 from pyaedt.edb_core.general import convert_py_list_to_net_list
 from pyaedt.edb_core.padstack import EdbPadstacks
 from pyaedt.generic.constants import SourceType
@@ -123,10 +124,6 @@ class Components(object):
     @property
     def _db(self):
         return self._pedb.db
-
-    @property
-    def _components_methods(self):
-        return self._pedb.edblib.Layout.ComponentsMethods
 
     @property
     def components(self):
@@ -517,6 +514,79 @@ class Components(object):
         return False
 
     @pyaedt_function_handler()
+    def create_source_on_component(self, sources=None):
+        """Create voltage, current source, or resistor on component.
+
+        Parameters
+        ----------
+        sources : list[Source]
+            List of ``EDB_Data.Source`` objects.
+
+        Returns
+        -------
+        double, bool
+            ``True`` when successful, ``False`` when failed.
+
+        """
+
+        if not sources:  # pragma: no cover
+            return False
+        if isinstance(sources, Source):  # pragma: no cover
+            sources = [sources]
+        if isinstance(sources, list):  # pragma: no cover
+            for src in sources:
+                if not isinstance(src, Source):  # pragma: no cover
+                    self._logger.error("List of source objects must be passed as an argument.")
+                    return False
+        for source in sources:
+            positive_pins = self.get_pin_from_component(source.positive_node.component, source.positive_node.net)
+            negative_pins = self.get_pin_from_component(source.negative_node.component, source.negative_node.net)
+            positive_pin_group = self.create_pingroup_from_pins(positive_pins)
+            if not positive_pin_group:  # pragma: no cover
+                return False
+            negative_pin_group = self.create_pingroup_from_pins(negative_pins)
+            if not negative_pin_group:  # pragma: no cover
+                return False
+            positive_pin_group_term = self._create_pin_group_terminal(positive_pin_group)
+            if positive_pin_group_term:  # pragma: no cover
+                negative_pin_group_term = self._create_pin_group_terminal(negative_pin_group)
+                if not negative_pin_group_term:  # pragma: no cover
+                    self._logger.error("Failed to create negative pin group terminal for source {}".format(source.name))
+                    return False
+                if source.source_type == SourceType.Vsource:  # pragma: no cover
+                    positive_pin_group_term.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kVoltageSource)
+                    negative_pin_group_term.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kVoltageSource)
+                elif source.source_type == SourceType.Isource:  # pragma: no cover
+                    positive_pin_group_term.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kCurrentSource)
+                    negative_pin_group_term.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.kCurrentSource)
+                elif source.source_type == SourceType.Resistor:  # pragma: no cover
+                    positive_pin_group_term.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.RlcBoundary)
+                    negative_pin_group_term.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.RlcBoundary)
+                    rlc = self._edb.Utility.Rlc()
+                    rlc.IsParallel = True
+                    rlc.REnabled = True
+                    rlc.R = self._get_edb_value(source.impedance_value)
+                    rlc.LEnabled = True
+                    rlc.CEnabled = True
+                    positive_pin_group_term.SetImpedance(self._get_edb_value(source.impedance_value))
+                    negative_pin_group_term.SetImpedance(self._get_edb_value(source.impedance_value))
+                    positive_pin_group_term.SetRlcBoundaryParameters(rlc)
+                if (
+                    source.source_type == SourceType.Vsource or source.source_type == SourceType.Isource
+                ):  # pragma: no cover
+                    positive_pin_group_term.SetSourceAmplitude(self._get_edb_value(source.amplitude))
+                    negative_pin_group_term.SetSourceAmplitude(self._get_edb_value(source.amplitude))
+                    positive_pin_group_term.SetSourcePhase(self._get_edb_value(source.phase))
+                    negative_pin_group_term.SetSourcePhase(self._get_edb_value(source.phase))
+                    positive_pin_group_term.SetImpedance(self._get_edb_value(source.impedance_value))
+                    negative_pin_group_term.SetImpedance(self._get_edb_value(source.impedance_value))
+                term_name = generate_unique_name(source.name)
+                positive_pin_group_term.SetName(term_name)
+                negative_pin_group_term.SetName("{}_ref".format(term_name))
+                positive_pin_group_term.SetReferenceTerminal(negative_pin_group_term)
+        return True
+
+    @pyaedt_function_handler()
     def create_port_on_component(
         self,
         component,
@@ -606,12 +676,15 @@ class Components(object):
                         return False
                 for net in net_list:
                     pins = [pin for pin in cmp_pins if pin.GetNet().GetName() == net]
-                    pin_group = self.create_pingroup_from_pins(pins)
-                    if not pin_group:
-                        return False
-                    pin_group_term = self._create_pin_group_terminal(pin_group)
-                    if pin_group_term:
-                        pin_group_term.SetReferenceTerminal(ref_pin_group_term)
+                    if pins:
+                        pin_group = self.create_pingroup_from_pins(pins)
+                        if not pin_group:
+                            return False
+                        pin_group_term = self._create_pin_group_terminal(pin_group)
+                        if pin_group_term:
+                            pin_group_term.SetReferenceTerminal(ref_pin_group_term)
+                    else:
+                        self._logger.info("No pins found on component {} for the net {}".format(component, net))
 
             else:
                 for net in net_list:
@@ -644,10 +717,8 @@ class Components(object):
             self._edb.Geometry.PointData(self._get_edb_value(0.0), self._get_edb_value(0.0)),
             0.0,
         )
-        if not is_ironpython:
-            res, from_layer, to_layer = pin.GetLayerRange(None, None)
-        else:
-            res, from_layer, to_layer = pin.GetLayerRange()
+
+        res, from_layer, _ = pin.GetLayerRange()
         cmp_name = pin.GetComponent().GetName()
         net_name = pin.GetNet().GetName()
         pin_name = pin.GetName()
@@ -724,29 +795,73 @@ class Components(object):
             if not component:
                 self._logger.error("component %s not found.", component)
                 return False
-        if is_ironpython:
-            component_type = component.edbcomponent.GetComponentType()
-            if (
-                component_type == self._edb.Definition.ComponentType.Other
-                or component_type == self._edb.Definition.ComponentType.IC
-                or component_type == self._edb.Definition.ComponentType.IO
-            ):
-                self._logger.info("Component %s passed to deactivate is not an RLC.", component.refdes)
-                return False
-        else:
-            if not component.edbcomponent.GetComponentType() in [1, 2, 3]:
-                self._logger.info("Component %s passed to deactivate is not an RLC.", component.refdes)
-                return False
+        component_type = component.edbcomponent.GetComponentType()
+        if (
+            component_type == self._edb.Definition.ComponentType.Other
+            or component_type == self._edb.Definition.ComponentType.IC
+            or component_type == self._edb.Definition.ComponentType.IO
+        ):
+            self._logger.info("Component %s passed to deactivate is not an RLC.", component.refdes)
+            return False
         if create_circuit_port:
-            _cmp = convert_py_list_to_net_list([component.refdes])
-            self._components_methods.AddPortOnRlcComponent(self._active_layout, _cmp)
+            self.add_port_on_rlc_component(component.refdes)
+            return True
         else:
-            self._components_methods.DeactivateRlcComponent(component.edbcomponent)
-        return True
+            return self.set_component_rlc(component.refdes)
+
+    @pyaedt_function_handler()
+    def add_port_on_rlc_component(self, component=None):
+        """Deactivate RLC component and replace it with a circuit port.
+        The circuit port supports only 2-pin components.
+
+        Parameters
+        ----------
+        component : str
+            Reference designator of the RLC component.
+
+        Returns
+        -------
+        bool
+            ``True`` when successful, ``False`` when failed.
+        """
+        if isinstance(component, str):  # pragma: no cover
+            component = self.components[component]
+        if not isinstance(component, EDBComponent):  # pragma: no cover
+            return False
+        self.set_component_rlc(component.refdes)
+        pins = self.get_pin_from_component(component.refdes)
+        if len(pins) == 2:  # pragma: no cover
+            pos_pin_loc = self.get_pin_position(pins[0])
+            pt = self._pedb.edb.Geometry.PointData(
+                self._get_edb_value(pos_pin_loc[0]), self._get_edb_value(pos_pin_loc[1])
+            )
+            pin_layers = self._padstack._get_pin_layer_range(pins[0])
+            pos_pin_term = self._pedb.edb.Cell.Terminal.PointTerminal.Create(
+                self._active_layout, pins[0].GetNet(), pins[0].GetName(), pt, pin_layers[0]
+            )
+            if not pos_pin_term:  # pragma: no cover
+                return False
+            neg_pin_loc = self.get_pin_position(pins[1])
+            pt = self._pedb.edb.Geometry.PointData(
+                self._get_edb_value(neg_pin_loc[0]), self._get_edb_value(neg_pin_loc[1])
+            )
+            neg_pin_term = self._pedb.edb.Cell.Terminal.PointTerminal.Create(
+                self._active_layout, pins[1].GetNet(), pins[1].GetName() + "_ref", pt, pin_layers[0]
+            )
+            if not neg_pin_term:  # pragma: no cover
+                return False
+            pos_pin_term.SetBoundaryType(self._pedb.edb.Cell.Terminal.BoundaryType.PortBoundary)
+            pos_pin_term.SetIsCircuitPort(True)
+            pos_pin_term.SetName(component.refdes)
+            neg_pin_term.SetBoundaryType(self._pedb.edb.Cell.Terminal.BoundaryType.PortBoundary)
+            neg_pin_term.SetIsCircuitPort(True)
+            pos_pin_term.SetReferenceTerminal(neg_pin_term)
+            self._logger.info("Component {} has been replaced by port".format(component.refdes))
+            return True
 
     @pyaedt_function_handler()
     def _create_pin_group_terminal(self, pingroup, isref=False):
-        """Creates edb pin group terminal from given edb pin group.
+        """Creates an EDB pin group terminal from a given EDB pin group.
 
         Parameters
         ----------
@@ -823,13 +938,8 @@ class Components(object):
         new_cmp.SetGroup(new_group)
         for pin in pins:
             pin.SetIsLayoutPin(True)
-            if is_ironpython:
-                test = new_group.AddMember(pin)
-            else:
-                if not self._components_methods.AddPinToGroup(new_group, pin):
-                    self._logger.error(
-                        "Failed to add pin {} to the group {}".format(pin.GetName(), new_group.GetName())
-                    )
+            new_group.AddMember(pin)
+
         if not placement_layer:
             new_cmp_layer_name = pins[0].GetPadstackDef().GetData().GetLayerNames()[0]
         else:
@@ -1203,32 +1313,35 @@ class Components(object):
         ... )
 
         """
-        edbComponent = self.get_component_by_name(componentname)
-        componentType = edbComponent.GetComponentType()
-        edbRlcComponentProperty = self._edb.Cell.Hierarchy.RLCComponentProperty()
-        componentPins = self.get_pin_from_component(componentname)
-        pinNumber = len(componentPins)
-        if pinNumber == 2:
-            fromPin = componentPins[0]
-            toPin = componentPins[1]
-            if res_value is None and ind_value is None and cap_value is None:
-                return False
+        edb_component = self.get_component_by_name(componentname)
+        edb_rlc_component_property = self._edb.Cell.Hierarchy.RLCComponentProperty()
+        component_pins = self.get_pin_from_component(componentname)
+        pin_number = len(component_pins)
+        if pin_number == 2:
+            from_pin = component_pins[0]
+            to_pin = component_pins[1]
             rlc = self._edb.Utility.Rlc()
             rlc.IsParallel = isparallel
             if res_value is not None:
                 rlc.REnabled = True
                 rlc.R = self._get_edb_value(res_value)
+            else:
+                rlc.REnabled = False
             if ind_value is not None:
                 rlc.LEnabled = True
                 rlc.L = self._get_edb_value(ind_value)
+            else:
+                rlc.LEnabled = False
             if cap_value is not None:
                 rlc.CEnabled = True
                 rlc.C = self._get_edb_value(cap_value)
-            pinPair = self._edb.Utility.PinPair(fromPin.GetName(), toPin.GetName())
-            rlcModel = self._edb.Cell.Hierarchy.PinPairModel()
-            rlcModel.SetPinPairRlc(pinPair, rlc)
-            if not edbRlcComponentProperty.SetModel(rlcModel) or not edbComponent.SetComponentProperty(
-                edbRlcComponentProperty
+            else:
+                rlc.CEnabled = False
+            pin_pair = self._edb.Utility.PinPair(from_pin.GetName(), to_pin.GetName())
+            rlc_model = self._edb.Cell.Hierarchy.PinPairModel()
+            rlc_model.SetPinPairRlc(pin_pair, rlc)
+            if not edb_rlc_component_property.SetModel(rlc_model) or not edb_component.SetComponentProperty(
+                edb_rlc_component_property
             ):
                 self._logger.error("Failed to set RLC model on component")
                 return False
@@ -1393,10 +1506,10 @@ class Components(object):
         """
         if is_ironpython:
             name = clr.Reference[String]()
-            response = pin.GetProductProperty(0, 11, name)
+            pin.GetProductProperty(self._edb.ProductId.Designer, 11, name)
         else:
             val = String("")
-            response, name = pin.GetProductProperty(0, 11, val)
+            _, name = pin.GetProductProperty(self._edb.ProductId.Designer, 11, val)
         name = str(name).strip("'")
         return name
 
@@ -1422,13 +1535,8 @@ class Components(object):
         >>> edbapp.core_components.get_pin_position(pin)
 
         """
-        if is_ironpython:
-            res, pt_pos, rot_pos = pin.GetPositionAndRotation()
-        else:
-            res, pt_pos, rot_pos = pin.GetPositionAndRotation(
-                self._edb.Geometry.PointData(self._get_edb_value(0.0), self._get_edb_value(0.0)),
-                0.0,
-            )
+        res, pt_pos, rot_pos = pin.GetPositionAndRotation()
+
         if pin.GetComponent().IsNull():
             transformed_pt_pos = pt_pos
         else:

@@ -8,6 +8,7 @@ from pyaedt.generic.DataHandlers import _dict2arg
 from pyaedt.generic.DataHandlers import random_string
 from pyaedt.generic.general_methods import filter_tuple
 from pyaedt.generic.general_methods import generate_unique_name
+from pyaedt.generic.general_methods import PropsManager
 from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.modeler.Object3d import _dim_arg
 from pyaedt.modeler.Object3d import EdgePrimitive
@@ -50,7 +51,7 @@ class BoundaryProps(OrderedDict):
         OrderedDict.__setitem__(self, key, value)
 
 
-class BoundaryCommon(object):
+class BoundaryCommon(PropsManager):
     """ """
 
     @pyaedt_function_handler()
@@ -590,7 +591,7 @@ class BoundaryObject(BoundaryCommon, object):
             self._app.oboundary.SetSBRTxRxSettings(self._get_args())  # pragma: no cover
         elif self.type == "Floquet Port":
             self._app.oboundary.EditFloquetPort(self._boundary_name, self._get_args())  # pragma: no cover
-        elif self.type == "EndConnection":
+        elif self.type == "End Connection":
             self._app.oboundary.EditEndConnection(self._boundary_name, self._get_args())
         else:
             return False  # pragma: no cover

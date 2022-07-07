@@ -239,7 +239,7 @@ class Maxwell(object):
                 self.logger.info("Infinite is the only return path option in EddyCurrent")
                 return_path = ["infinite"] * len(sources)
 
-        if not self.solution_type in ["Transient", "ElectricTransient"]:
+        if self.solution_type not in ["Transient", "ElectricTransient"]:
             if not matrix_name:
                 matrix_name = generate_unique_name("Matrix")
             if not turns or len(sources) != len(self.modeler.convert_to_selections(turns, True)):
@@ -396,7 +396,7 @@ class Maxwell(object):
         activate_eddy_effects : bool, optional
             Whether to activate eddy effects. The default is ``True``.
         activate_displacement_current : bool, optional
-            Whether to activate eddy effects. The default is ``True``.
+            Whether to activate the displacement current. The default is ``True``.
 
         Returns
         -------
@@ -410,35 +410,57 @@ class Maxwell(object):
         """
         solid_objects_names = self.get_all_conductors_names()
 
-        if not activate_eddy_effects:
-            activate_displacement_current = False
-
         EddyVector = ["NAME:EddyEffectVector"]
-        for obj in solid_objects_names:
-            if obj in object_list:
-                EddyVector.append(
-                    [
-                        "NAME:Data",
-                        "Object Name:=",
-                        obj,
-                        "Eddy Effect:=",
-                        activate_eddy_effects,
-                        "Displacement Current:=",
-                        activate_displacement_current,
-                    ]
-                )
-            else:
-                EddyVector.append(
-                    [
-                        "NAME:Data",
-                        "Object Name:=",
-                        obj,
-                        "Eddy Effect:=",
-                        bool(self.oboundary.GetEddyEffect(obj)),
-                        "Displacement Current:=",
-                        bool(self.oboundary.GetDisplacementCurrent(obj)),
-                    ]
-                )
+        if self.modeler._is3d:
+            if not activate_eddy_effects:
+                activate_displacement_current = False
+            for obj in solid_objects_names:
+                if obj in object_list:
+                    EddyVector.append(
+                        [
+                            "NAME:Data",
+                            "Object Name:=",
+                            obj,
+                            "Eddy Effect:=",
+                            activate_eddy_effects,
+                            "Displacement Current:=",
+                            activate_displacement_current,
+                        ]
+                    )
+                else:
+                    EddyVector.append(
+                        [
+                            "NAME:Data",
+                            "Object Name:=",
+                            obj,
+                            "Eddy Effect:=",
+                            bool(self.oboundary.GetEddyEffect(obj)),
+                            "Displacement Current:=",
+                            bool(self.oboundary.GetDisplacementCurrent(obj)),
+                        ]
+                    )
+        else:
+            for obj in solid_objects_names:
+                if obj in object_list:
+                    EddyVector.append(
+                        [
+                            "NAME:Data",
+                            "Object Name:=",
+                            obj,
+                            "Eddy Effect:=",
+                            activate_eddy_effects,
+                        ]
+                    )
+                else:
+                    EddyVector.append(
+                        [
+                            "NAME:Data",
+                            "Object Name:=",
+                            obj,
+                            "Eddy Effect:=",
+                            bool(self.oboundary.GetEddyEffect(obj)),
+                        ]
+                    )
 
         self.oboundary.SetEddyEffect(["NAME:Eddy Effect Setting", EddyVector])
         return True

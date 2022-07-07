@@ -418,6 +418,48 @@ class EdgePrimitive(EdgeTypePrimitive, object):
         self.oeditor = object3d.m_Editor
 
     @property
+    def segment_info(self):
+        """Compute segment information using the object-oriented method (from AEDT 2021 R2
+        with beta options). The method manages segment info for lines, circles and ellipse
+        providing information about all of those.
+
+
+        Returns
+        -------
+            list
+                Segment info if available."""
+        try:
+            self.oeditor.GetChildNames()
+        except:  # pragma: no cover
+            return {}
+        ll = list(self.oeditor.GetObjectsInGroup("Lines"))
+        self.oeditor.CreateObjectFromEdges(
+            ["NAME:Selections", "Selections:=", self._object3d.name, "NewPartsModelFlag:=", "NonModel"],
+            ["NAME:Parameters", ["NAME:BodyFromEdgeToParameters", "Edges:=", [self.id]]],
+            ["CreateGroupsForNewObjects:=", False],
+        )
+        new_line = [i for i in list(self.oeditor.GetObjectsInGroup("Lines")) if i not in ll]
+        self.oeditor.GenerateHistory(
+            ["NAME:Selections", "Selections:=", new_line[0], "NewPartsModelFlag:=", "NonModel", "UseCurrentCS:=", True]
+        )
+        oo = self.oeditor.GetChildObject(new_line[0])
+        segment = {}
+        if len(self.vertices) == 2:
+            oo1 = oo.GetChildObject(oo.GetChildNames()[0]).GetChildObject("Segment0")
+        else:
+            oo1 = oo.GetChildObject(oo.GetChildNames()[0])
+        for prop in oo1.GetPropNames():
+            if "/" not in prop:
+                val = oo1.GetPropValue(prop)
+                if "X:=" in val and len(val) == 6:
+                    segment[prop] = [val[1], val[3], val[5]]
+                else:
+                    segment[prop] = val
+        self._object3d._primitives._odesign.Undo()
+        self._object3d._primitives._odesign.Undo()
+        return segment
+
+    @property
     def vertices(self):
         """Vertices list.
 
@@ -476,10 +518,9 @@ class EdgePrimitive(EdgeTypePrimitive, object):
         >>> oEditor.GetVertexPosition
 
         """
-        if len(self.vertices) == 2:
-            length = GeometryOperators.points_distance(self.vertices[0].position, self.vertices[1].position)
-            return float(length)
-        else:
+        try:
+            return float(self.oeditor.GetEdgeLength(self.id))
+        except:
             return False
 
     def __repr__(self):
@@ -1270,13 +1311,104 @@ class Object3d(object):
 
         Returns
         -------
-        list
+        List of :class:`pyaedt.modeler.Object3d.FacePrimitive`
         """
         f_list = []
         for face in self.faces:
             if face.is_on_bounding():
-                f_list.append(face.id)
+                f_list.append(face)
         return f_list
+
+    @property
+    def face_closest_to_bounding_box(self):
+        """Return only the face ids of the face closest to the bounding box.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.Object3d.FacePrimitive`
+        """
+        b = [float(i) for i in list(self.m_Editor.GetModelBoundingBox())]
+        f_id = None
+        f_val = None
+        for face in self.faces:
+            c = face.center
+            p_dist = min(
+                [
+                    abs(c[0] - b[0]),
+                    abs(c[1] - b[1]),
+                    abs(c[2] - b[2]),
+                    abs(c[0] - b[3]),
+                    abs(c[1] - b[4]),
+                    abs(c[2] - b[5]),
+                ]
+            )
+
+            if f_val and p_dist < f_val or not f_val:
+                f_id = face
+                f_val = p_dist
+        return f_id
+
+    @pyaedt_function_handler()
+    def largest_face(self, n=1):
+        """Return only the face with the greatest area.
+
+        Returns
+        -------
+        List of :class:`pyaedt.modeler.Object3d.FacePrimitive`
+        """
+        f = []
+        for face in self.faces:
+            f.append((face.area, face))
+        f.sort(key=lambda tup: tup[0], reverse=True)
+        f_sorted = [x for y, x in f]
+        return f_sorted[:n]
+
+    @pyaedt_function_handler()
+    def longest_edge(self, n=1):
+        """Return only the edge with the greatest length.
+
+        Returns
+        -------
+        List of :class:`pyaedt.modeler.Object3d.EdgePrimitive`
+        """
+        e = []
+        for edge in self.edges:
+            e.append((edge.length, edge))
+        e.sort(key=lambda tup: tup[0], reverse=True)
+        e_sorted = [x for y, x in e]
+        return e_sorted[:n]
+
+    @pyaedt_function_handler()
+    def smallest_face(self, n=1):
+        """Return only the face with the smallest area.
+
+        Returns
+        -------
+        List of :class:`pyaedt.modeler.Object3d.FacePrimitive`
+        """
+        f = []
+        for face in self.faces:
+            f.append((face.area, face))
+        f.sort(key=lambda tup: tup[0])
+        f_sorted = [x for y, x in f]
+        return f_sorted[:n]
+
+    @pyaedt_function_handler()
+    def shortest_edge(self, n=1):
+        """Return only the edge with the smallest length.
+
+        Returns
+        -------
+        List of :class:`pyaedt.modeler.Object3d.EdgePrimitive`
+        """
+        e = []
+        for edge in self.edges:
+            e.append((edge.length, edge))
+        e.sort(
+            key=lambda tup: tup[0],
+        )
+        e_sorted = [x for y, x in e]
+        return e_sorted[:n]
 
     @property
     def top_face_z(self):
@@ -1701,6 +1833,7 @@ class Object3d(object):
             vMaterial = ["NAME:Material", "Value:=", chr(34) + matobj.name + chr(34)]
             self._change_property(vMaterial)
             self._material_name = matobj.name.lower()
+            self._solve_inside = None
         else:
             self.logger.warning("Material %s does not exist.", mat)
 
@@ -2510,6 +2643,93 @@ class Object3d(object):
         self.__dict__ = {}
 
     @pyaedt_function_handler()
+    def faces_by_area(self, area, area_filter="==", tolerance=1e-12):
+        """Filter faces by area.
+
+        Parameters
+        ----------
+        area : float
+            Value of the area to filter in model units.
+        area_filter : str, optional
+            Comparer symbol.
+            Default value is "==".
+        tolerance : float, optional
+            tolerance for comparison.
+
+        Returns
+        -------
+        list of :class:`pyaedt.modeler.Object3d.FacePrimitive`
+            list of face primitives.
+        """
+
+        filters = ["==", "<=", ">=", "<", ">"]
+        if area_filter not in filters:
+            raise ValueError('Symbol not valid, enter one of the following: "==", "<=", ">=", "<", ">"')
+
+        faces = []
+        for face in self.faces:
+            if area_filter == "==":
+                if abs(face.area - area) < tolerance:
+                    faces.append(face)
+            if area_filter == ">=":
+                if (face.area - area) >= -tolerance:
+                    faces.append(face)
+            if area_filter == "<=":
+                if (face.area - area) <= tolerance:
+                    faces.append(face)
+            if area_filter == ">":
+                if (face.area - area) > 0:
+                    faces.append(face)
+            if area_filter == "<":
+                if (face.area - area) < 0:
+                    faces.append(face)
+
+        return faces
+
+    @pyaedt_function_handler()
+    def edges_by_length(self, length, length_filter="==", tolerance=1e-12):
+        """Filter edges by length.
+
+        Parameters
+        ----------
+        length : float
+            Value of the length to filter.
+        length_filter : str, optional
+            Comparer symbol.
+            Default value is "==".
+        tolerance : float, optional
+            tolerance for comparison.
+
+        Returns
+        -------
+        list of :class:`pyaedt.modeler.Object3d.EdgePrimitive`
+            list of edge primitives.
+        """
+        filters = ["==", "<=", ">=", "<", ">"]
+        if length_filter not in filters:
+            raise ValueError('Symbol not valid, enter one of the following: "==", "<=", ">=", "<", ">"')
+
+        edges = []
+        for edge in self.edges:
+            if length_filter == "==":
+                if abs(edge.length - length) < tolerance:
+                    edges.append(edge)
+            if length_filter == ">=":
+                if (edge.length - length) >= -tolerance:
+                    edges.append(edge)
+            if length_filter == "<=":
+                if (edge.length - length) <= tolerance:
+                    edges.append(edge)
+            if length_filter == ">":
+                if (edge.length - length) > 0:
+                    edges.append(edge)
+            if length_filter == "<":
+                if (edge.length - length) < 0:
+                    edges.append(edge)
+
+        return edges
+
+    @pyaedt_function_handler()
     def _change_property(self, vPropChange):
         return self._primitives._change_geometry_property(vPropChange, self._m_name)
 
@@ -2957,13 +3177,15 @@ class CircuitPins(object):
         return ""
 
     @pyaedt_function_handler()
-    def connect_to_component(self, component_pin):
+    def connect_to_component(self, component_pin, page_name=None):
         """Connect schematic components.
 
         Parameters
         ----------
         component_pin : :class:`pyaedt.modeler.PrimitivesNexxim.CircuitPins`
            Component Pin to attach
+        name : str, optional
+            page port name.
 
         Returns
         -------
@@ -2980,9 +3202,10 @@ class CircuitPins(object):
         comp_angle = self._circuit_comp.angle * math.pi / 180
         if len(self._circuit_comp.pins) == 2:
             comp_angle += math.pi / 2
-        page_name = "{}_{}".format(
-            self._circuit_comp.composed_name.replace("CompInst@", "").replace(";", "_"), self.name
-        )
+        if page_name is None:
+            page_name = "{}_{}".format(
+                self._circuit_comp.composed_name.replace("CompInst@", "").replace(";", "_"), self.name
+            )
 
         if "Port" in self._circuit_comp.composed_name:
             try:
@@ -3311,12 +3534,17 @@ class CircuitComponent(object):
     @angle.setter
     def angle(self, angle=None):
         """Set the part angle."""
-        if not angle:
-            angle = str(self._angle) + "°"
+        if not settings.use_grpc_api:
+            if not angle:
+                angle = str(self._angle) + "°"
+            else:
+                angle = _dim_arg(angle, "°")
+            vMaterial = ["NAME:Component Angle", "Value:=", angle]
+            self.change_property(vMaterial)
         else:
-            angle = _dim_arg(angle, "°")
-        vMaterial = ["NAME:Component Angle", "Value:=", angle]
-        self.change_property(vMaterial)
+            self._circuit_components._app.logger.error(
+                "Grpc doesn't support angle settings because special characters are not supported."
+            )
 
     @property
     def mirror(self):

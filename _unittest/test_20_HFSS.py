@@ -1,5 +1,7 @@
 import os
 
+from _unittest.conftest import config
+
 try:
     import pytest
 except ImportError:
@@ -125,6 +127,7 @@ class TestClass(BasisTest, object):
         setup.props["MaximumPasses"] = 1
         assert setup.update()
         assert self.aedtapp.create_linear_count_sweep("MySetup", "GHz", 0.8, 1.2, 401)
+        assert not self.aedtapp.setups[0].sweeps[0].is_solved
         assert self.aedtapp.create_linear_count_sweep("MySetup", "GHz", 0.8, 1.2, 401)
         assert self.aedtapp.create_linear_count_sweep(
             setupname="MySetup",
@@ -490,6 +493,13 @@ class TestClass(BasisTest, object):
         assert imp.name in self.aedtapp.modeler.get_boundaries_name()
         assert imp.update()
 
+        box3 = self.aedtapp.modeler.create_box([0, 0, 20], [10, 10, 5], "rlc3", "copper")
+        lumped_rlc2 = self.aedtapp.create_lumped_rlc_between_objects(
+            "rlc2", "rlc3", self.aedtapp.AxisDir.XPos, Rvalue=50, Lvalue=1e-9, Cvalue=1e-9
+        )
+        assert lumped_rlc2.name in self.aedtapp.modeler.get_boundaries_name()
+        assert lumped_rlc2.update()
+
     def test_15_create_perfects_on_sheets(self):
         rect = self.aedtapp.modeler.create_rectangle(
             self.aedtapp.PLANE.XY, [0, 0, 0], [10, 2], name="RectBound", matname="Copper"
@@ -512,6 +522,15 @@ class TestClass(BasisTest, object):
             self.aedtapp.PLANE.XY, [0, 0, 0], [10, 2], name="rlcBound", matname="Copper"
         )
         imp = self.aedtapp.assign_lumped_rlc_to_sheet(rect.name, self.aedtapp.AxisDir.XPos, Rvalue=50, Lvalue=1e-9)
+        names = self.aedtapp.modeler.get_boundaries_name()
+        assert imp.name in self.aedtapp.modeler.get_boundaries_name()
+
+        rect2 = self.aedtapp.modeler.create_rectangle(
+            self.aedtapp.PLANE.XY, [0, 0, 10], [10, 2], name="rlcBound2", matname="Copper"
+        )
+        imp = self.aedtapp.assign_lumped_rlc_to_sheet(
+            rect.name, self.aedtapp.AxisDir.XPos, rlctype="Serial", Rvalue=50, Lvalue=1e-9
+        )
         names = self.aedtapp.modeler.get_boundaries_name()
         assert imp.name in self.aedtapp.modeler.get_boundaries_name()
 
@@ -945,3 +964,26 @@ class TestClass(BasisTest, object):
         )
         assert not hfss2.set_differential_pair(positive_terminal="P2_T1", negative_terminal="P2_T3")
         hfss2.close_project()
+
+    @pytest.mark.skipif(
+        is_ironpython or config["desktopVersion"] < "2022.2",
+        reason="Not working in non-graphical in version lower than 2022.2",
+    )
+    def test_51_array(self):
+        self.aedtapp.insert_design("Array_simple", "Modal")
+        from pyaedt.generic.DataHandlers import json_to_dict
+
+        dict_in = json_to_dict(os.path.join(local_path, "example_models", "array_simple.json"))
+        dict_in["Circ_Patch_5GHz1"] = os.path.join(local_path, "example_models", "Circ_Patch_5GHz.a3dcomp")
+        dict_in["cells"][(3, 3)] = {"name": "Circ_Patch_5GHz1"}
+        assert self.aedtapp.add_3d_component_array_from_json(dict_in)
+        dict_in["cells"][(3, 3)]["rotation"] = 90
+        assert self.aedtapp.add_3d_component_array_from_json(dict_in)
+        pass
+
+    def test_52_set_material_threshold(self):
+        assert self.aedtapp.set_material_threshold()
+        threshold = 123123123
+        assert self.aedtapp.set_material_threshold(threshold)
+        assert self.aedtapp.set_material_threshold(str(threshold))
+        assert not self.aedtapp.set_material_threshold("e")

@@ -12,6 +12,16 @@ from pyaedt.generic.general_methods import generate_unique_name
 from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.modules.Boundary import BoundaryObject
 from pyaedt.modules.Boundary import Matrix
+from pyaedt.application.Variables import decompose_variable_value
+
+from pyaedt import is_ironpython
+from pyaedt import settings
+
+if not is_ironpython:
+    try:
+        import numpy as np
+    except ImportError:
+        pass
 
 
 class QExtractor(FieldAnalysis3D, object):
@@ -113,6 +123,22 @@ class QExtractor(FieldAnalysis3D, object):
         return matrix
 
     @pyaedt_function_handler()
+    def get_all_sources(self):
+        """Retrieve all setup sources.
+
+        Returns
+        -------
+        list of str
+            List of all setup sources.
+
+        References
+        ----------
+
+        >>> oModule.GetAllSources
+        """
+        return self.excitations
+
+    @pyaedt_function_handler()
     def get_traces_for_plot(
         self,
         get_self_terms=True,
@@ -158,6 +184,188 @@ class QExtractor(FieldAnalysis3D, object):
             second_element_filter=second_element_filter,
             category=category,
         )
+
+    @pyaedt_function_handler()
+    def export_mesh_stats(self, setup_name, variation_string="", mesh_path=None, setup_type="CG"):
+        """Export mesh statistics to a file.
+
+        Parameters
+        ----------
+        setup_name :str
+            Setup name.
+        variation_string : str, optional
+            Variation list. The default is ``""``.
+        mesh_path : str, optional
+            Full path to the mesh statistics file. The default is ``None``, in which
+            caswe the working directory is used.
+        setup_type : str, optional
+            Setup type in Q3D. The default is "CG", other options are "AC RL" or "DC RL".
+
+        Returns
+        -------
+        str
+            File path.
+
+        References
+        ----------
+        >>> oDesign.ExportMeshStats
+        """
+        if not mesh_path:
+            mesh_path = os.path.join(self.working_directory, "meshstats.ms")
+        self.odesign.ExportMeshStats(setup_name, variation_string, setup_type, mesh_path)
+        return mesh_path
+
+    @pyaedt_function_handler()
+    def edit_sources(
+        self,
+        cg=None,
+        acrl=None,
+        dcrl=None,
+    ):
+        """Set up the source loaded for Q3D or Q2D in multiple sources simultaneously.
+
+        Parameters
+        ----------
+        cg : dict, optional
+            Dictionary of input sources to modify module and phase of CG solution.
+            Dictionary values can be:
+            - 1 Value to set up ``0deg`` as the default
+            - 2 A values tuple or list (magnitude and phase)
+        acrl : dict, optional
+            Dictionary of input sources to modify module and phase of ACRL solution.
+            Dictionary values can be:
+            - 1 Value to setup 0deg as default or
+            - 2 values tuple or list (magnitude and phase).
+        dcrl : dict, optional
+            Dictionary of input sources to modify module and phase of DCRL solution, only available for Q3D.
+            Dictionary values can be:
+            - 1 Value to set up ``0deg`` as the default
+            - 2 A values tuple or list (magnitude and phase)
+
+        Returns
+        -------
+        bool
+
+        Examples
+        --------
+        >>> sources_cg = {"Box1": ("1V", "0deg"), "Box1_2": "1V"}
+        >>> sources_acrl = {"Box1:Source1": ("5A", "0deg")}
+        >>> sources_dcrl = {"Box1_1:Source2": ("5V", "0deg")}
+        >>> hfss.edit_sources(sources_cg, sources_acrl, sources_dcrl)
+        """
+        setting_AC = []
+        setting_CG = []
+        setting_DC = []
+        if cg:
+            net_list = ["NAME:Source Names"]
+            if self.default_solution_type == "Q3D Extractor":
+                excitation = self.nets
+            else:
+                excitation = self.excitations
+
+            for key, value in cg.items():
+                if key not in excitation:
+                    self.logger.error("Not existing net " + key)
+                    return False
+                else:
+                    net_list.append(key)
+
+            if self.default_solution_type == "Q3D Extractor":
+                value_list = ["NAME:Source Values"]
+                phase_list = ["NAME:Source Values"]
+            else:
+                value_list = ["NAME:Magnitude"]
+                phase_list = ["NAME:Phase"]
+
+            for key, vals in cg.items():
+                if isinstance(vals, str):
+                    value = vals
+                    phase = "0deg"
+                else:
+                    value = vals[0]
+                    if len(vals) == 1:
+                        phase = "0deg"
+                    else:
+                        phase = vals[1]
+                value_list.append(value)
+                phase_list.append(phase)
+            if self.default_solution_type == "Q3D Extractor":
+                setting_CG = ["NAME:Cap", "Value Type:=", "N", net_list, value_list, phase_list]
+            else:
+                setting_CG = ["NAME:CGSources", net_list, value_list, phase_list]
+        if acrl:
+            source_list = ["NAME:Source Names"]
+            unit = "V"
+            for key, value in acrl.items():
+                excitation = self.excitations
+                if key not in excitation:
+                    self.logger.error("Not existing excitation " + key)
+                    return False
+                else:
+                    source_list.append(key)
+            if self.default_solution_type == "Q3D Extractor":
+                value_list = ["NAME:Source Values"]
+                phase_list = ["NAME:Source Values"]
+            else:
+                value_list = ["NAME:Magnitude"]
+                phase_list = ["NAME:Phase"]
+            for key, vals in acrl.items():
+                if isinstance(vals, str):
+                    magnitude = decompose_variable_value(vals)
+                    value = vals
+                    phase = "0deg"
+                else:
+                    value = vals[0]
+                    magnitude = decompose_variable_value(value)
+                    if len(vals) == 1:
+                        phase = "0deg"
+                    else:
+                        phase = vals[1]
+                if magnitude[1]:
+                    unit = magnitude[1]
+                else:
+                    value += unit
+
+                value_list.append(value)
+                phase_list.append(phase)
+
+            if self.default_solution_type == "Q3D Extractor":
+                setting_AC = ["NAME:AC", "Value Type:=", unit, source_list, value_list]
+            else:
+                setting_AC = ["NAME:RLSources", source_list, value_list, phase_list]
+        if dcrl and self.default_solution_type == "Q3D Extractor":
+            unit = "V"
+            source_list = ["NAME:Source Names"]
+            for key, value in dcrl.items():
+                excitation = self.excitations
+                if key not in excitation:
+                    self.logger.error("Not existing excitation " + key)
+                    return False
+                else:
+                    source_list.append(key)
+            if self.default_solution_type == "Q3D Extractor":
+                value_list = ["NAME:Source Values"]
+            else:
+                value_list = ["NAME:Magnitude"]
+            for key, vals in dcrl.items():
+                magnitude = decompose_variable_value(vals)
+                if magnitude[1]:
+                    unit = magnitude[1]
+                else:
+                    vals += unit
+                if isinstance(vals, str):
+                    value = vals
+                else:
+                    value = vals[0]
+                value_list.append(value)
+            setting_DC = ["NAME:DC", "Value Type:=", unit, source_list, value_list]
+
+        if self.default_solution_type == "Q3D Extractor":
+            self.osolution.EditSources(setting_AC, setting_CG, setting_DC)
+        else:
+            self.osolution.EditSources(setting_CG, setting_AC)
+
+        return True
 
 
 class Q3d(QExtractor, object):
@@ -723,6 +931,52 @@ class Q3d(QExtractor, object):
                 sweepdata.update()
                 return sweepdata
         return False
+
+    @pyaedt_function_handler()
+    def set_material_thresholds(
+        self, insulator_threshold=None, perfect_conductor_threshold=None, magnetic_threshold=None
+    ):
+        """Set material threshold.
+
+        Parameters
+        ----------
+        insulator_threshold : float, optional
+            Threshold for insulator/conductor.
+            If "None" its value is set to 10000.
+        perfect_conductor_threshold : float, optional
+            Threshold that decides whether a conductor is perfectly conducting. It must be higher than
+            insulator threshold.
+            If "None" its value is set to 1E+030.
+        magnetic_threshold : float, optional
+            Threshold that decides whether a material is magnetic.
+            If "None" its value is set to 1.01.
+
+        Returns
+        -------
+        bool
+            ``True`` when successful, ``False`` when failed.
+        """
+        try:
+            if not insulator_threshold:
+                insulator_threshold = 10000
+            if not perfect_conductor_threshold:
+                perfect_conductor_threshold = float("1E+30")
+            else:
+                if perfect_conductor_threshold < insulator_threshold:
+                    msg = "Perfect conductor threshold must be higher than insulator threshold."
+                    raise ValueError(msg)
+            if not magnetic_threshold:
+                magnetic_threshold = 1.01
+
+            if not is_ironpython and not settings.use_grpc_api:
+                insulator_threshold = np.longdouble(insulator_threshold)
+                perfect_conductor_threshold = np.longdouble(perfect_conductor_threshold)
+                magnetic_threshold = np.longdouble(magnetic_threshold)
+
+            self.oboundary.SetMaterialThresholds(insulator_threshold, perfect_conductor_threshold, magnetic_threshold)
+            return True
+        except:
+            return False
 
 
 class Q2d(QExtractor, object):

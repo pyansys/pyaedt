@@ -619,6 +619,21 @@ class Layers(object):
         return self._modeler.oeditor
 
     @property
+    def zones(self):
+        """List of all available zones.
+
+        Returns
+        -------
+        list
+        """
+        all_layers = list(self._modeler.oeditor.GetStackupLayerNames())
+        zones = []
+        for lay in all_layers:
+            if ";" in lay:
+                zones.append(lay.split(";")[0])
+        return list(set(zones))
+
+    @property
     def LengthUnit(self):
         """Length units."""
         return self._modeler.model_units
@@ -637,7 +652,7 @@ class Layers(object):
 
         >>> oEditor.GetStackupLayerNames()
         """
-        return self.oeditor.GetStackupLayerNames()
+        return [i for i in self.oeditor.GetStackupLayerNames() if ";" not in i]
 
     @property
     def drawing_layers(self):
@@ -654,7 +669,7 @@ class Layers(object):
         >>> oEditor.GetAllLayerNames()
         """
         stackup = self.all_layers
-        return [i for i in list(self.oeditor.GetAllLayerNames()) if i not in stackup]
+        return [i for i in list(self.oeditor.GetAllLayerNames()) if i not in stackup and ";" not in i]
 
     @property
     def all_signal_layers(self):
@@ -692,7 +707,7 @@ class Layers(object):
             if layid not in self.layers:
                 self.refresh_all_layers()
             if self.layers[layid].type == "dielectric":
-                die.append(layid)
+                die.append(lay)
         return die
 
     @pyaedt_function_handler()
@@ -723,7 +738,7 @@ class Layers(object):
         int
             Number of layers in the current stackup.
         """
-        layernames = self.oeditor.GetAllLayerNames()
+        layernames = [i for i in self.oeditor.GetAllLayerNames() if ";" not in i]
         for el in layernames:
             o = Layer(self, "signal")
             o.name = el
@@ -857,7 +872,7 @@ class Layers(object):
         """
         if mode.lower() == "multizone":
             zones = ["NAME:Zones", "Primary"]
-            for i in range(number_zones - 1):
+            for i in range(number_zones):
                 zones.append("Zone{}".format(i + 1))
             args = ["NAME:layers", "Mode:=", "Multizone", zones, ["NAME:pps"]]
         elif mode.lower() == "overlap":

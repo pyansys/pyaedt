@@ -21,6 +21,7 @@ from pyaedt.generic.general_methods import _pythonver
 from pyaedt.generic.general_methods import _retry_ntimes
 from pyaedt.generic.general_methods import generate_unique_name
 from pyaedt.generic.general_methods import pyaedt_function_handler
+from pyaedt.generic.general_methods import PropsManager
 from pyaedt.modeler.GeometryOperators import GeometryOperators
 from pyaedt.modeler.Object3d import EdgePrimitive
 from pyaedt.modeler.Object3d import FacePrimitive
@@ -76,7 +77,7 @@ class ListsProps(OrderedDict):
         OrderedDict.__setitem__(self, key, value)
 
 
-class BaseCoordinateSystem(object):
+class BaseCoordinateSystem(PropsManager, object):
     """Base methods common to FaceCoordinateSystem and CoordinateSystem.
 
     Parameters
@@ -887,7 +888,7 @@ class CoordinateSystem(BaseCoordinateSystem, object):
         return coordinateSystemAttributes
 
 
-class Lists(object):
+class Lists(PropsManager, object):
     """Manages Lists data and execution.
 
     Parameters
@@ -2361,7 +2362,14 @@ class GeometryModeler(Modeler, object):
         return True
 
     @pyaedt_function_handler()
-    def duplicate_and_mirror(self, objid, position, vector, is_3d_comp=False):
+    def duplicate_and_mirror(
+        self,
+        objid,
+        position,
+        vector,
+        is_3d_comp=False,
+        duplicate_assignment=True,
+    ):
         """Duplicate and mirror a selection.
 
         Parameters
@@ -2376,6 +2384,8 @@ class GeometryModeler(Modeler, object):
             Application.Position object for the vector.
         is_3d_comp : bool, optional
             If ``True``, the method will try to return the duplicated list of 3dcomponents. The default is ``False``.
+        duplicate_assignment : bool, optional
+            If True, the method duplicates selection assignments. The default value is ``True``.
 
         Returns
         -------
@@ -2399,7 +2409,7 @@ class GeometryModeler(Modeler, object):
         vArg2.append("DuplicateMirrorNormalX:="), vArg2.append(Xnorm)
         vArg2.append("DuplicateMirrorNormalY:="), vArg2.append(Ynorm)
         vArg2.append("DuplicateMirrorNormalZ:="), vArg2.append(Znorm)
-        vArg3 = ["NAME:Options", "DuplicateAssignments:=", False]
+        vArg3 = ["NAME:Options", "DuplicateAssignments:=", duplicate_assignment]
         if is_3d_comp:
             orig_3d = [i for i in self.components_3d_names]
         added_objs = self.oeditor.DuplicateMirror(vArg1, vArg2, vArg3)
@@ -2489,7 +2499,16 @@ class GeometryModeler(Modeler, object):
         return True
 
     @pyaedt_function_handler()
-    def duplicate_around_axis(self, objid, cs_axis, angle=90, nclones=2, create_new_objects=True, is_3d_comp=False):
+    def duplicate_around_axis(
+        self,
+        objid,
+        cs_axis,
+        angle=90,
+        nclones=2,
+        create_new_objects=True,
+        is_3d_comp=False,
+        duplicate_assignment=True,
+    ):
         """Duplicate a selection around an axis.
 
         Parameters
@@ -2507,6 +2526,8 @@ class GeometryModeler(Modeler, object):
             default is ``True``.
         is_3d_comp : bool, optional
             If ``True``, the method will try to return the duplicated list of 3dcomponents. The default is ``False``.
+        duplicate_assignment : bool, optional
+            If True, the method duplicates selection assignments. The default value is ``True``.
 
         Returns
         -------
@@ -2531,7 +2552,7 @@ class GeometryModeler(Modeler, object):
             "Numclones:=",
             str(nclones),
         ]
-        vArg3 = ["NAME:Options", "DuplicateBoundaries:=", "true"]
+        vArg3 = ["NAME:Options", "DuplicateAssignments:=", duplicate_assignment]
         if is_3d_comp:
             orig_3d = [i for i in self.components_3d_names]
         added_objs = self.oeditor.DuplicateAroundAxis(vArg1, vArg2, vArg3)
@@ -2552,7 +2573,15 @@ class GeometryModeler(Modeler, object):
             return False, []
 
     @pyaedt_function_handler()
-    def duplicate_along_line(self, objid, vector, nclones=2, attachObject=False, is_3d_comp=False):
+    def duplicate_along_line(
+        self,
+        objid,
+        vector,
+        nclones=2,
+        attachObject=False,
+        is_3d_comp=False,
+        duplicate_assignment=True,
+    ):
         """Duplicate a selection along a line.
 
         Parameters
@@ -2568,6 +2597,9 @@ class GeometryModeler(Modeler, object):
             Number of clones. The default is ``2``.
         is_3d_comp : bool, optional
             If True, the method will try to return the duplicated list of 3dcomponents. The default is ``False``.
+        duplicate_assignment : bool, optional
+            If True, the method duplicates selection assignments. The default value is ``True``.
+
         Returns
         -------
         tuple
@@ -2587,7 +2619,7 @@ class GeometryModeler(Modeler, object):
         vArg2.append("YComponent:="), vArg2.append(Ypos)
         vArg2.append("ZComponent:="), vArg2.append(Zpos)
         vArg2.append("Numclones:="), vArg2.append(str(nclones))
-        vArg3 = ["NAME:Options", "DuplicateBoundaries:=", "true"]
+        vArg3 = ["NAME:Options", "DuplicateAssignments:=", duplicate_assignment]
         if is_3d_comp:
             orig_3d = [i for i in self.components_3d_names]
         added_objs = self.oeditor.DuplicateAlongLine(vArg1, vArg2, vArg3)
@@ -2598,7 +2630,6 @@ class GeometryModeler(Modeler, object):
                 self.logger.info("Found 3D Components Duplication")
                 return True, added_3d_comps
         return True, list(added_objs)
-        # return self._duplicate_added_objects_tuple()
 
     @pyaedt_function_handler()
     def thicken_sheet(self, objid, thickness, bBothSides=False):
@@ -3619,8 +3650,8 @@ class GeometryModeler(Modeler, object):
 
         Returns
         -------
-        bool
-            ``True`` when successful, ``False`` when failed.
+        :class:`pyaedt.modeler.Modeler.Lists`
+            List object when successful, ``False`` when failed.
 
         References
         ----------
@@ -3628,10 +3659,10 @@ class GeometryModeler(Modeler, object):
         >>> oEditor.CreateEntityList
         """
         if name:
-            list_names = [i.name for i in self.user_lists]
-            if name in list_names:
-                self.logger.error("A List with the specified name already exists!")
-                return False
+            for i in self.user_lists:
+                if i.name == name:
+                    self.logger.warning("A List with the specified name already exists!")
+                    return i
         face_list = self.convert_to_selections(face_list, True)
         user_list = Lists(self)
         list_type = "Face"
@@ -3642,7 +3673,7 @@ class GeometryModeler(Modeler, object):
                 type=list_type,
             )
             if result:
-                return result
+                return user_list
             else:
                 self._app.logger.error("Wrong object definition. Review object list and type")
                 return False
@@ -3663,8 +3694,8 @@ class GeometryModeler(Modeler, object):
 
         Returns
         -------
-        bool
-            ``True`` when successful, ``False`` when failed.
+        :class:`pyaedt.modeler.Modeler.Lists`
+            List object when successful, ``False`` when failed.
 
         References
         ----------
@@ -3672,10 +3703,10 @@ class GeometryModeler(Modeler, object):
         >>> oEditor.CreateEntityList
         """
         if name:
-            list_names = [i.name for i in self.user_lists]
-            if name in list_names:
-                self.logger.error("A List with the specified name already exists!")
-                return False
+            for i in self.user_lists:
+                if i.name == name:
+                    self.logger.warning("A List with the specified name already exists!")
+                    return i
         object_list = self.convert_to_selections(object_list, True)
         user_list = Lists(self)
         list_type = "Object"
@@ -3686,7 +3717,7 @@ class GeometryModeler(Modeler, object):
                 type=list_type,
             )
             if result:
-                return result
+                return user_list
             else:
                 self._app.logger.error("Wrong object definition. Review object list and type")
                 return False
@@ -4147,7 +4178,7 @@ class GeometryModeler(Modeler, object):
         return position_list
 
     @pyaedt_function_handler()
-    def import_3d_cad(self, filename, healing=False, refresh_all_ids=True):
+    def import_3d_cad(self, filename, healing=False, refresh_all_ids=True, import_materials=False):
         """Import a CAD model.
 
         Parameters
@@ -4164,6 +4195,8 @@ class GeometryModeler(Modeler, object):
             Whether to refresh all IDs after the CAD file is loaded. The
             default is ``True``. Refreshing IDs can take a lot of time in
             a big project.
+        import_materials : bool optional
+            Either to import material names from the file or not if presents.
 
         Returns
         -------
@@ -4176,18 +4209,13 @@ class GeometryModeler(Modeler, object):
         >>> oEditor.Import
         """
 
-        if isinstance(healing, int):
-            if healing == 0:
-                healing = False
-            else:
-                healing = True
+        if healing in [0, 1]:
             warnings.warn(
                 "Assigning `0` or `1` to `healing` option is deprecated. Assign `True` or `False` instead.",
                 DeprecationWarning,
             )
-
         vArg1 = ["NAME:NativeBodyParameters"]
-        vArg1.append("HealOption:="), vArg1.append(1 if healing else 0)
+        vArg1.append("HealOption:="), vArg1.append(int(healing))
         vArg1.append("Options:="), vArg1.append("-1")
         vArg1.append("FileType:="), vArg1.append("UnRecognized")
         vArg1.append("MaxStitchTol:="), vArg1.append(-1)
@@ -4198,7 +4226,7 @@ class GeometryModeler(Modeler, object):
         vArg1.append("MergeFacesAngle:="), vArg1.append(-1)
         vArg1.append("PointCoincidenceTol:="), vArg1.append(1e-06)
         vArg1.append("CreateLightweightPart:="), vArg1.append(False)
-        vArg1.append("ImportMaterialNames:="), vArg1.append(False)
+        vArg1.append("ImportMaterialNames:="), vArg1.append(import_materials)
         vArg1.append("SeparateDisjointLumps:="), vArg1.append(False)
         vArg1.append("SourceFile:="), vArg1.append(filename)
         self.oeditor.Import(vArg1)

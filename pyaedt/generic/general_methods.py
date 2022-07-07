@@ -1,5 +1,7 @@
+import codecs
 import csv
 import datetime
+import difflib
 import fnmatch
 import inspect
 import itertools
@@ -27,6 +29,9 @@ except:
     inside_desktop = False
 
 is_remote_server = os.getenv("PYAEDT_IRONPYTHON_SERVER", "False").lower() in ("true", "1", "t")
+
+if not is_ironpython:
+    import psutil
 
 
 class MethodNotSupportedError(Exception):
@@ -553,6 +558,74 @@ def remove_project_lock(project_path):
 
 
 @pyaedt_function_handler()
+def read_csv(filename, encoding="utf-8"):
+    """Read information from a CSV file and return a list.
+
+    Parameters
+    ----------
+    filename : str
+            Full path and name for the csv file.
+    encoding : str, optional
+            File encoding to be provided for csv. The default is ``utf-8``.
+
+    Returns
+    -------
+    list
+
+    """
+
+    lines = []
+    with codecs.open(filename, "rb", encoding) as csvfile:
+        reader = csv.reader(csvfile, delimiter=",")
+        for row in reader:
+            lines.append(row)
+    return lines
+
+
+@pyaedt_function_handler()
+def read_tab(filename):
+    """Read information from a TAB file and return a list.
+
+    Parameters
+    ----------
+    filename : str
+            Full path and name for the tab file.
+
+    Returns
+    -------
+    list
+
+    """
+    with open(filename) as my_file:
+        lines = my_file.readlines()
+    return lines
+
+
+@pyaedt_function_handler()
+def read_xlsx(filename):
+    """Read information from a XLSX file and return a list.
+
+    Parameters
+    ----------
+    filename : str
+            Full path and name for the xlsx file.
+
+    Returns
+    -------
+    list
+
+    """
+    try:
+        import pandas as pd
+
+        lines = pd.read_excel(filename)
+        return lines
+    except:
+        lines = []
+        return lines
+
+
+@pyaedt_function_handler()
 def write_csv(output, list_data, delimiter=",", quotechar="|", quoting=csv.QUOTE_MINIMAL):
     if is_ironpython:
         f = open(output, "wb")
@@ -684,6 +757,154 @@ def _create_json_file(json_dict, full_json_path):
     return True
 
 
+@pyaedt_function_handler()
+def grpc_active_sessions(version=None, student_version=False, non_graphical=False):
+    """Return the active grpc aedt session inf.
+
+    Parameters
+    ----------
+    version : str, optional
+        String of the version to check. By default checks on every version. Options are "222" or "2022.2".
+    student_version : bool, optional
+        Either if check for student version session or not.
+    non_graphical : bool, optional
+        Either to check for active graphical or non graphical sessions.
+
+    Returns
+    -------
+    list
+        List of grpc port.
+    """
+    if student_version:
+        keys = ["ansysedtsv.exe"]
+    else:
+        keys = ["ansysedt.exe"]
+    if version and "." in version:
+        version = version[-4:].replace(".", "")
+    sessions = []
+    for p in psutil.process_iter():
+        try:
+            if p.name() in keys:
+                cmd = p.cmdline()
+                if "-grpcsrv" in cmd:
+                    if non_graphical and "-ng" in cmd or not non_graphical:
+                        if not version or (version and version in cmd[0]):
+                            sessions.append(
+                                int(cmd[cmd.index("-grpcsrv") + 1]),
+                            )
+        except:
+            pass
+    return sessions
+
+
+class PropsManager(object):
+    def __getitem__(self, item):
+        """Get the `self.props` key value.
+
+        Parameters
+        ----------
+        item : str
+            Key to search
+        """
+        item_split = item.split("/")
+        props = self.props
+        found_el = []
+        matching_percentage = 1
+        while matching_percentage >= 0.4:
+            for item_value in item_split:
+                found_el = difflib.get_close_matches(item_value, list(props.keys()), 1, 0.8)
+                if found_el:
+                    props = props[found_el[0]]
+            if found_el:
+                return props
+            else:
+                matching_percentage -= 0.02
+        self._app.logger.warning("Key %s not found.Check one of available keys in self.available_properties", item)
+        return None
+
+    def __setitem__(self, key, value):
+        """Set the `self.props` key value.
+
+        Parameters
+        ----------
+        key : str
+            Key to apply.
+        value : int or float or bool or str or dict
+            Value to apply
+        """
+        item_split = key.split("/")
+        found_el = []
+        props = self.props
+        matching_percentage = 1
+        key_path = []
+        while matching_percentage >= 0.4:
+            for item_value in item_split:
+                found_el = self._recursive_search(props, item_value, matching_percentage)
+                if found_el:
+                    props = found_el[1][found_el[2]]
+                    key_path.append(found_el[2])
+            if found_el:
+                if matching_percentage < 1:
+                    self._app.logger.info(
+                        "Key %s matched internal key '%s' with confidence of %s.",
+                        key,
+                        "/".join(key_path),
+                        round(matching_percentage * 100),
+                    )
+                matching_percentage = 0
+
+            else:
+                matching_percentage -= 0.02
+        if found_el:
+            found_el[1][found_el[2]] = value
+            self.update()
+        else:
+            props[key] = value
+            self.update()
+            self._app.logger.warning("Key %s not found. Trying to applying new key ", key)
+
+    @pyaedt_function_handler()
+    def _recursive_search(self, dict_in, key="", matching_percentage=0.8):
+        f = difflib.get_close_matches(key, list(dict_in.keys()), 1, matching_percentage)
+        if f:
+            return True, dict_in, f[0]
+        else:
+            for v in list(dict_in.values()):
+                if isinstance(v, (dict, OrderedDict)):
+                    out_val = self._recursive_search(v, key, matching_percentage)
+                    if out_val:
+                        return out_val
+        return False
+
+    @pyaedt_function_handler()
+    def _recursive_list(self, dict_in, prefix=""):
+        available_list = []
+        for k, v in dict_in.items():
+            if prefix:
+                name = prefix + "/" + k
+            else:
+                name = k
+            available_list.append(name)
+            if isinstance(v, (dict, OrderedDict)):
+                available_list.extend(self._recursive_list(v, name))
+        return available_list
+
+    @property
+    def available_properties(self):
+        """Available properties.
+
+        Returns
+        -------
+        list
+        """
+        return self._recursive_list(self.props)
+
+    @pyaedt_function_handler()
+    def update(self):
+        """Update method."""
+        pass
+
+
 class Settings(object):
     """Class that manages all PyAEDT Environment Variables and global settings."""
 
@@ -707,6 +928,7 @@ class Settings(object):
         self._use_grpc_api = False
         self.machine = ""
         self.port = 0
+        self.formatter = None
 
     @property
     def use_grpc_api(self):

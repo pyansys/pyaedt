@@ -42,6 +42,9 @@ from pyaedt.generic.general_methods import is_ironpython
 from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.generic.general_methods import write_csv
 from pyaedt.generic.general_methods import settings
+from pyaedt.generic.general_methods import read_csv
+from pyaedt.generic.general_methods import read_tab
+from pyaedt.generic.general_methods import read_xlsx
 from pyaedt.generic.general_methods import _retry_ntimes
 from pyaedt.generic.LoadAEDTFile import load_entire_aedt_file
 from pyaedt.modules.Boundary import BoundaryObject, MaxwellParameters
@@ -203,9 +206,6 @@ class Design(AedtObjects, object):
         self.odesign = design_name
         AedtObjects.__init__(self, is_inherithed=True)
 
-        self.design_solutions._odesign = self.odesign
-        if solution_type:
-            self.design_solutions.solution_type = solution_type
         self._variable_manager = VariableManager(self)
         self._project_datasets = []
         self._design_datasets = []
@@ -730,7 +730,7 @@ class Design(AedtObjects, object):
             valids = []
             for name in names:
                 des = self.get_oo_object(self.oproject, name)
-                if des.GetDesignType() == self.design_type:
+                if hasattr(des, "GetDesignType") and des.GetDesignType() == self.design_type:
                     if self.design_type in [
                         "Circuit Design",
                         "Twin Builder",
@@ -792,14 +792,22 @@ class Design(AedtObjects, object):
         if des_name:
             if self._assert_consistent_design_type(des_name) == des_name:
                 self._insert_design(self._design_type, design_name=des_name)
+            self.design_solutions._odesign = self.odesign
+            if self._temp_solution_type:
+                self.design_solutions.solution_type = self._temp_solution_type
         else:
             activedes, warning_msg = self._find_design()
             if activedes:
                 self._odesign = self.oproject.SetActiveDesign(activedes)
                 self.logger.info(warning_msg)
+                self.design_solutions._odesign = self.odesign
+
             else:
                 self.logger.info(warning_msg)
                 self._insert_design(self._design_type)
+                self.design_solutions._odesign = self.odesign
+                if self._temp_solution_type:
+                    self.design_solutions.solution_type = self._temp_solution_type
 
     @property
     def oproject(self):
@@ -1855,6 +1863,24 @@ class Design(AedtObjects, object):
                         )
                 except:
                     pass
+        if self.design_properties and "ModelSetup" in self.design_properties:
+            if "MotionSetupList" in self.design_properties["ModelSetup"]:
+                for ds in self.design_properties["ModelSetup"]["MotionSetupList"]:
+                    try:
+                        motion_list = "MotionSetupList"
+                        setup = "ModelSetup"
+                        # check moving part
+                        if isinstance(self.design_properties[setup][motion_list][ds], (OrderedDict, dict)):
+                            boundaries.append(
+                                BoundaryObject(
+                                    self,
+                                    ds,
+                                    self.design_properties["ModelSetup"]["MotionSetupList"][ds],
+                                    self.design_properties["ModelSetup"]["MotionSetupList"][ds]["MotionType"],
+                                )
+                            )
+                    except:
+                        pass
         return boundaries
 
     @pyaedt_function_handler()
@@ -2237,15 +2263,17 @@ class Design(AedtObjects, object):
         )
 
     @pyaedt_function_handler()
-    def import_dataset3d(self, filename, dsname=None):
+    def import_dataset3d(self, filename, dsname=None, encoding="utf-8-sig"):
         """Import a 3D dataset.
 
         Parameters
         ----------
         filename : str
-            Full path and name for the TAB file.
+            Full path and name for the tab/csv/xlsx file.
         dsname : str, optional
             Name of the dataset. The default is the file name.
+        encoding : str, optional
+            File encoding to be provided for csv.
 
         Returns
         -------
@@ -2256,12 +2284,45 @@ class Design(AedtObjects, object):
 
         >>> oProject.AddDataset
         """
-        with open(filename, "r") as f:
-            lines = f.read().splitlines()
-        header = lines[0]
-        points = lines[1:]
+        index_of_dot = filename.rfind(".")
+        file_extension = filename[index_of_dot + 1 :]
+        xlist = []
+        ylist = []
+        zlist = []
+        vlist = []
 
-        header_list = header.split("\t")
+        if file_extension == "xlsx":
+            self.logger.warning("You need pandas and openpyxl library installed for reading excel files")
+            lines = read_xlsx(filename)
+            if list(lines):
+                header = str([lines.columns[i] for i in range(len(lines.columns))])
+                xlist = list((lines.iloc[:, 0]).array)
+                ylist = list((lines.iloc[:, 1]).array)
+                zlist = list((lines.iloc[:, 2]).array)
+                vlist = list((lines.iloc[:, 3]).array)
+            else:
+                self.logger.error("Pandas is not installed. Either install pandas or save the file as .csv or .tab.")
+                return False
+
+        elif file_extension == "csv":
+            lines = read_csv(filename, encoding)
+            header = " ".join(lines[0])
+            for row in lines[1:]:
+                xlist.append(float(row[0]))
+                ylist.append(float(row[1]))
+                zlist.append(float(row[2]))
+                vlist.append(float(row[3]))
+
+        elif file_extension == "tab":
+            lines = read_tab(filename)
+            header = lines[0]
+            for item in lines[1:]:
+                xlist.append(float(item.split()[0]))
+                ylist.append(float(item.split()[1]))
+                zlist.append(float(item.split()[2]))
+                vlist.append(float(item.split()[3]))
+
+        header_list = header.split()
         units = ["", "", "", ""]
         cont = 0
         for h in header_list:
@@ -2269,16 +2330,6 @@ class Design(AedtObjects, object):
             if result:
                 units[cont] = result.group(1)
             cont += 1
-
-        xlist = []
-        ylist = []
-        zlist = []
-        vlist = []
-        for item in points:
-            xlist.append(float(item.split()[0]))
-            ylist.append(float(item.split()[1]))
-            zlist.append(float(item.split()[2]))
-            vlist.append(float(item.split()[3]))
 
         if not dsname:
             dsname = os.path.basename(os.path.splitext(filename)[0])
@@ -2917,7 +2968,7 @@ class Design(AedtObjects, object):
         return new_designname
 
     @pyaedt_function_handler()
-    def duplicate_design(self, label):
+    def duplicate_design(self, label, save_after_duplicate=True):
         """Copy a design to a new name.
 
         The new name consists of the original
@@ -2928,6 +2979,9 @@ class Design(AedtObjects, object):
         ----------
         label : str
             Name of the design to copy.
+        save_after_duplicate : bool, optional
+            Save project after the duplication is completed. If ``False``, pyaedt objects like boundaries will not be
+            available.
 
         Returns
         -------
@@ -2955,6 +3009,9 @@ class Design(AedtObjects, object):
         self.design_name = newname
         self._close_edb()
         AedtObjects.__init__(self, is_inherithed=True)
+        if save_after_duplicate:
+            self.oproject.Save()
+            self._project_dictionary = None
         return True
 
     @pyaedt_function_handler()
@@ -3226,17 +3283,27 @@ class Design(AedtObjects, object):
         >>> M3D["p3"] = "P1 * p2"
         >>> eval_p3 = M3D.get_evaluated_value("p3")
         """
+        val = None
+        var_obj = None
         if "$" in variable_name:
             app = self._oproject
+            var_obj = self.get_oo_object(app, "Variables/{}".format(variable_name))
+
         else:
             app = self._odesign
-        var_obj = self.get_oo_object(app, "Variables/{}".format(variable_name))
+            if self.design_type in ["Circuit Design", "Twin Builder", "HFSS 3D Layout Design"]:
+                if variable_name in self.get_oo_name(app, "Instance:{}".format(self._odesign.GetName())):
+                    var_obj = self.get_oo_object(app, "Instance:{}/{}".format(self._odesign.GetName(), variable_name))
+                elif variable_name in self.get_oo_object(app, "DefinitionParameters").GetPropNames():
+                    val = self.get_oo_object(app, "DefinitionParameters").GetPropValue(variable_name)
+            else:
+                var_obj = self.get_oo_object(app, "Variables/{}".format(variable_name))
         if var_obj:
-            if is_ironpython:  # pragma: no cover
+            if is_ironpython or settings.use_grpc_api:  # pragma: no cover
                 val = var_obj.Get_SIValue()
             else:
                 val = var_obj.Get_SIValue
-        else:
+        elif not val:
             try:
                 variation_string = self._odesign.GetNominalVariation()
                 val = self._odesign.GetVariationVariableValue(variation_string, variable_name)  # pragma: no cover

@@ -5,23 +5,25 @@ import time
 import warnings
 from collections import OrderedDict
 
+from pyaedt import generate_unique_name
 from pyaedt.edb_core.general import convert_py_list_to_net_list
 from pyaedt.generic.constants import BasisOrder
 from pyaedt.generic.constants import CutoutSubdesignType
+from pyaedt.generic.constants import NodeType
 from pyaedt.generic.constants import RadiationBoxType
 from pyaedt.generic.constants import SolverType
+from pyaedt.generic.constants import SourceType
 from pyaedt.generic.constants import SweepType
-from pyaedt.generic.general_methods import is_ironpython
+from pyaedt.generic.constants import validate_enum_class_value
 from pyaedt.generic.general_methods import pyaedt_function_handler
 from pyaedt.modeler.GeometryOperators import GeometryOperators
 
 try:
-    from System import Array
     from System.Collections.Generic import List
 except ImportError:
     if os.name != "posix":
         warnings.warn(
-            "The clr is missing. Install Python.NET or use an IronPython version if you want to use the EDB module."
+            "The clr is missing. Install PythonNET or use an IronPython version if you want to use the EDB module."
         )
 
 
@@ -481,8 +483,8 @@ class EDBLayer(object):
         self.init_vals()
 
     @property
-    def _stackup_methods(self):
-        return self._pedblayers._stackup_methods
+    def _cloned_layer(self):
+        return self._layer.Clone()
 
     @property
     def _builder(self):
@@ -555,7 +557,7 @@ class EDBLayer(object):
             Name of the material.
         """
         try:
-            self._material_name = self._layer.GetMaterial()
+            self._material_name = self._cloned_layer.GetMaterial()
         except:
             pass
         return self._material_name
@@ -576,7 +578,7 @@ class EDBLayer(object):
             Thickness value.
         """
         try:
-            self._thickness = self._layer.GetThicknessValue().ToDouble()
+            self._thickness = self._cloned_layer.GetThicknessValue().ToDouble()
         except:
             pass
         return self._thickness
@@ -600,7 +602,7 @@ class EDBLayer(object):
             or self._layer_type == self._edb.Cell.LayerType.ConductingLayer
         ):
             try:
-                self._filling_material_name = self._layer.GetFillMaterial()
+                self._filling_material_name = self._cloned_layer.GetFillMaterial()
             except:
                 pass
             return self._filling_material_name
@@ -703,7 +705,7 @@ class EDBLayer(object):
             Lower elevation.
         """
         try:
-            self._lower_elevation = self._layer.GetLowerElevation()
+            self._lower_elevation = self._cloned_layer.GetLowerElevation()
         except:
             pass
         return self._lower_elevation
@@ -724,7 +726,7 @@ class EDBLayer(object):
             Upper elevation.
         """
         try:
-            self._upper_elevation = self._layer.GetUpperElevation()
+            self._upper_elevation = self._cloned_layer.GetUpperElevation()
         except:
             pass
         return self._upper_elevation
@@ -743,7 +745,7 @@ class EDBLayer(object):
             or self._layer_type == self._edb.Cell.LayerType.ConductingLayer
         ):
             try:
-                self._etch_factor = float(self._layer.GetEtchFactor().ToString())
+                self._etch_factor = float(self._cloned_layer.GetEtchFactor().ToString())
                 return self._etch_factor
             except:
                 pass
@@ -1002,10 +1004,6 @@ class EDBLayers(object):
         return self._pedbstackup._logger
 
     @property
-    def _stackup_methods(self):
-        return self._pedbstackup._stackup_methods
-
-    @property
     def _edb(self):
         return self._pedbstackup._edb
 
@@ -1053,7 +1051,7 @@ class EDBLayers(object):
         )
         return sorted(
             allStackuplayers,
-            key=lambda lyr=self._edb.Cell.StackupLayer: lyr.GetLowerElevation(),
+            key=lambda lyr=self._edb.Cell.StackupLayer: lyr.Clone().GetLowerElevation(),
         )
 
     @property
@@ -1279,7 +1277,7 @@ class EDBLayers(object):
                     self._get_edb_value(0),
                     "",
                 )
-                self._edb_object[layerName] = EDBLayer(newLayer, self._pedbstackup)
+                self._edb_object[layerName] = EDBLayer(newLayer.Clone(), self._pedbstackup)
                 newLayer = self._edb_object[layerName].update_layer_vals(
                     layerName,
                     newLayer,
@@ -1322,7 +1320,7 @@ class EDBLayers(object):
                         self._get_edb_value(0),
                         "",
                     )
-                    self._edb_object[layerName] = EDBLayer(newLayer, self._pedbstackup)
+                    self._edb_object[layerName] = EDBLayer(newLayer.Clone(), self._pedbstackup)
                     newLayer = self._edb_object[layerName].update_layer_vals(
                         layerName,
                         newLayer,
@@ -1473,8 +1471,11 @@ class EDBPadProperties(object):
         int
             Type of the geometry.
         """
-        padparams = self._padstack_methods.GetPadParametersValue(self._edb_padstack, self.layer_name, self.pad_type)
-        return int(padparams.Item1)
+
+        padparams = self._edb_padstack.GetData().GetPadParametersValue(
+            self.layer_name, self.int_to_pad_type(self.pad_type)
+        )
+        return int(padparams[1])
 
     @geometry_type.setter
     def geometry_type(self, geom_type):
@@ -1507,8 +1508,11 @@ class EDBPadProperties(object):
         list
             List of parameters.
         """
-        pad_values = self._padstack_methods.GetPadParametersValue(self._edb_padstack, self.layer_name, self.pad_type)
-        return [i.ToDouble() for i in pad_values.Item2]
+
+        pad_values = self._edb_padstack.GetData().GetPadParametersValue(
+            self.layer_name, self.int_to_pad_type(self.pad_type)
+        )
+        return [i.ToDouble() for i in pad_values[2]]
 
     @property
     def polygon_data(self):
@@ -1520,10 +1524,10 @@ class EDBPadProperties(object):
             List of parameters.
         """
         try:
-            pad_values = self._padstack_methods.GetPolygonalPadParameters(
-                self._edb_padstack, self.layer_name, self.pad_type
+            pad_values = self._edb_padstack.GetData().GetPolygonalPadParameters(
+                self.layer_name, self.int_to_pad_type(self.pad_type)
             )
-            return pad_values.Item1
+            return pad_values[1]
         except:
             return
 
@@ -1536,8 +1540,12 @@ class EDBPadProperties(object):
         list
             List of parameters.
         """
-        pad_values = self._padstack_methods.GetPadParametersValue(self._edb_padstack, self.layer_name, self.pad_type)
-        return [i.ToString() for i in pad_values.Item2]
+        pad_values = self._edb_padstack.GetData().GetPadParametersValue(
+            self.layer_name, self.int_to_pad_type(self.pad_type)
+        )
+
+        # pad_values = self._padstack_methods.GetPadParametersValue(self._edb_padstack, self.layer_name, self)
+        return [i.ToString() for i in pad_values[2]]
 
     @parameters.setter
     def parameters(self, propertylist):
@@ -1557,8 +1565,11 @@ class EDBPadProperties(object):
         str
             Offset for the X axis.
         """
-        pad_values = self._padstack_methods.GetPadParametersValue(self._edb_padstack, self.layer_name, self.pad_type)
-        return pad_values.Item3.ToString()
+
+        pad_values = self._edb_padstack.GetData().GetPadParametersValue(
+            self.layer_name, self.int_to_pad_type(self.pad_type)
+        )
+        return pad_values[3].ToString()
 
     @offset_x.setter
     def offset_x(self, offset_value):
@@ -1574,8 +1585,11 @@ class EDBPadProperties(object):
         str
             Offset for the Y axis.
         """
-        pad_values = self._padstack_methods.GetPadParametersValue(self._edb_padstack, self.layer_name, self.pad_type)
-        return pad_values.Item4.ToString()
+
+        pad_values = self._edb_padstack.GetData().GetPadParametersValue(
+            self.layer_name, self.int_to_pad_type(self.pad_type)
+        )
+        return pad_values[4].ToString()
 
     @offset_y.setter
     def offset_y(self, offset_value):
@@ -1591,13 +1605,31 @@ class EDBPadProperties(object):
         str
             Value for the rotation.
         """
-        pad_values = self._padstack_methods.GetPadParametersValue(self._edb_padstack, self.layer_name, self.pad_type)
-        return pad_values.Item5.ToString()
+
+        pad_values = self._edb_padstack.GetData().GetPadParametersValue(
+            self.layer_name, self.int_to_pad_type(self.pad_type)
+        )
+        return pad_values[5].ToString()
 
     @rotation.setter
     def rotation(self, rotation_value):
 
         self._update_pad_parameters_parameters(rotation=rotation_value)
+
+    @pyaedt_function_handler()
+    def int_to_pad_type(self, val=0):
+        """Convert an integer to an EDB.PadGeometryType.
+
+        Parameters
+        ----------
+        val : int
+
+        Returns
+        -------
+        object
+            EDB.PadType enumerator value.
+        """
+        return self._pedbpadstack._ppadstack.int_to_pad_type(val)
 
     @pyaedt_function_handler()
     def int_to_geometry_type(self, val=0):
@@ -1612,32 +1644,7 @@ class EDBPadProperties(object):
         object
             EDB.PadGeometryType enumerator value.
         """
-        if val == 0:
-            return self._edb.Definition.PadGeometryType.NoGeometry
-        elif val == 1:
-            return self._edb.Definition.PadGeometryType.Circle
-        elif val == 2:
-            return self._edb.Definition.PadGeometryType.Square
-        elif val == 3:
-            return self._edb.Definition.PadGeometryType.Rectangle
-        elif val == 4:
-            return self._edb.Definition.PadGeometryType.Oval
-        elif val == 5:
-            return self._edb.Definition.PadGeometryType.Bullet
-        elif val == 6:
-            return self._edb.Definition.PadGeometryType.NSidedPolygon
-        elif val == 7:
-            return self._edb.Definition.PadGeometryType.Polygon
-        elif val == 8:
-            return self._edb.Definition.PadGeometryType.Round45
-        elif val == 9:
-            return self._edb.Definition.PadGeometryType.Round90
-        elif val == 10:
-            return self._edb.Definition.PadGeometryType.Square45
-        elif val == 11:
-            return self._edb.Definition.PadGeometryType.Square90
-        elif val == 12:
-            return self._edb.Definition.PadGeometryType.InvalidGeometry
+        return self._pedbpadstack._ppadstack.int_to_geometry_type(val)
 
     @pyaedt_function_handler()
     def _update_pad_parameters_parameters(
@@ -1690,13 +1697,11 @@ class EDBPadProperties(object):
             rotation = self.rotation
         if not layer_name:
             layer_name = self.layer_name
-        if is_ironpython:
-            if isinstance(geom_type, int):
-                geom_type = self.int_to_geometry_type(geom_type)
+
         newPadstackDefinitionData.SetPadParameters(
             layer_name,
-            pad_type,
-            geom_type,
+            self.int_to_pad_type(pad_type),
+            self.int_to_geometry_type(geom_type),
             convert_py_list_to_net_list(params),
             self._get_edb_value(offsetx),
             self._get_edb_value(offsety),
@@ -1790,13 +1795,7 @@ class EDBPadstack(object):
     @property
     def _hole_params(self):
         viaData = self.edb_padstack.GetData()
-        if is_ironpython:
-            out = viaData.GetHoleParametersValue()
-        else:
-            value0 = self._get_edb_value("0.0")
-            ptype = self._edb.Definition.PadGeometryType.Circle
-            HoleParam = Array[type(value0)]([])
-            out = viaData.GetHoleParametersValue(ptype, HoleParam, value0, value0, value0)
+        out = viaData.GetHoleParametersValue()
         return out
 
     @property
@@ -1839,28 +1838,21 @@ class EDBPadstack(object):
             hole_type = self.hole_type
         if not params:
             params = self.hole_parameters
+        if isinstance(params, list):
+            params = convert_py_list_to_net_list(params)
         if not offsetx:
             offsetx = self.hole_offset_x
         if not offsety:
             offsety = self.hole_offset_y
         if not rotation:
             rotation = self.hole_rotation
-        if is_ironpython:
-            newPadstackDefinitionData.SetHoleParameters(
-                hole_type,
-                params,
-                self._get_edb_value(offsetx),
-                self._get_edb_value(offsety),
-                self._get_edb_value(rotation),
-            )
-        else:
-            newPadstackDefinitionData.SetHoleParameters(
-                hole_type,
-                convert_py_list_to_net_list(params),
-                self._get_edb_value(offsetx),
-                self._get_edb_value(offsety),
-                self._get_edb_value(rotation),
-            )
+        newPadstackDefinitionData.SetHoleParameters(
+            hole_type,
+            params,
+            self._get_edb_value(offsetx),
+            self._get_edb_value(offsety),
+            self._get_edb_value(rotation),
+        )
         self.edb_padstack.SetData(newPadstackDefinitionData)
 
     @property
@@ -1959,7 +1951,7 @@ class EDBPadstack(object):
         float
             Percentage for the hole plating.
         """
-        return self.edb_padstack.GetData().GetHolePlatingPercentage()
+        return self._edb.Definition.PadstackDefData(self.edb_padstack.GetData()).GetHolePlatingPercentage()
 
     @hole_plating_ratio.setter
     def hole_plating_ratio(self, ratio):
@@ -2156,10 +2148,8 @@ class EDBPadstackInstance(object):
             Name of the starting layer.
         """
         layer = self._pedb.edb.Cell.Layer("", self._pedb.edb.Cell.LayerType.SignalLayer)
-        if is_ironpython:
-            _, start_layer, stop_layer = self._edb_padstackinstance.GetLayerRange()
-        else:
-            _, start_layer, stop_layer = self._edb_padstackinstance.GetLayerRange(layer, layer)
+        _, start_layer, stop_layer = self._edb_padstackinstance.GetLayerRange()
+
         if start_layer:
             return start_layer.GetName()
         return None
@@ -2180,10 +2170,8 @@ class EDBPadstackInstance(object):
             Name of the stopping layer.
         """
         layer = self._pedb.edb.Cell.Layer("", self._pedb.edb.Cell.LayerType.SignalLayer)
-        if is_ironpython:
-            _, start_layer, stop_layer = self._edb_padstackinstance.GetLayerRange()
-        else:
-            _, start_layer, stop_layer = self._edb_padstackinstance.GetLayerRange(layer, layer)
+        _, start_layer, stop_layer = self._edb_padstackinstance.GetLayerRange()
+
         if stop_layer:
             return stop_layer.GetName()
         return None
@@ -2237,13 +2225,8 @@ class EDBPadstackInstance(object):
             List of ``[x, y]``` coordinates for the padstack instance position.
         """
         point_data = self._pedb.edb.Geometry.PointData(self._pedb.edb_value(0.0), self._pedb.edb_value(0.0))
-        if is_ironpython:
-            out = self._edb_padstackinstance.GetPositionAndRotationValue()
-        else:
-            out = self._edb_padstackinstance.GetPositionAndRotationValue(
-                point_data,
-                self._pedb.edb_value(0.0),
-            )
+        out = self._edb_padstackinstance.GetPositionAndRotationValue()
+
         if out[0]:
             return [out[1].X.ToDouble(), out[1].Y.ToDouble()]
 
@@ -2268,13 +2251,8 @@ class EDBPadstackInstance(object):
             Rotatation value for the padstack instance.
         """
         point_data = self._pedb.edb.Geometry.PointData(self._pedb.edb_value(0.0), self._pedb.edb_value(0.0))
-        if is_ironpython:
-            out = self._edb_padstackinstance.GetPositionAndRotationValue()
-        else:
-            out = self._edb_padstackinstance.GetPositionAndRotationValue(
-                point_data,
-                self._pedb.edb_value(0.0),
-            )
+        out = self._edb_padstackinstance.GetPositionAndRotationValue()
+
         if out[0]:
             return out[2].ToDouble()
 
@@ -2302,7 +2280,7 @@ class EDBPadstackInstance(object):
     @name.setter
     def name(self, value):
         self._edb_padstackinstance.SetName(value)
-        self._edb_padstackinstance.SetProductProperty(0, 11, value)
+        self._edb_padstackinstance.SetProductProperty(self._pedb.edb.ProductId.Designer, 11, value)
 
     @pyaedt_function_handler()
     def parametrize_position(self, prefix=None):
@@ -2379,7 +2357,7 @@ class EDBPadstackInstance(object):
         str
             Name of the placement layer.
         """
-        return self._edb_padstackinstance.GetGroup().GetPlacementLayer().GetName()
+        return self._edb_padstackinstance.GetGroup().GetPlacementLayer().Clone().GetName()
 
     @property
     def lower_elevation(self):
@@ -2390,7 +2368,7 @@ class EDBPadstackInstance(object):
         float
             Lower elavation of the placement layer.
         """
-        return self._edb_padstackinstance.GetGroup().GetPlacementLayer().GetLowerElevation()
+        return self._edb_padstackinstance.GetGroup().GetPlacementLayer().Clone().GetLowerElevation()
 
     @property
     def upper_elevation(self):
@@ -2401,7 +2379,7 @@ class EDBPadstackInstance(object):
         float
            Upper elevation of the placement layer.
         """
-        return self._edb_padstackinstance.GetGroup().GetPlacementLayer().GetUpperElevation()
+        return self._edb_padstackinstance.GetGroup().GetPlacementLayer().Clone().GetUpperElevation()
 
     @property
     def top_bottom_association(self):
@@ -2671,7 +2649,7 @@ class EDBComponent(object):
         cmp_type = int(self.edbcomponent.GetComponentType())
         if 0 < cmp_type < 4:
             componentProperty = self.edbcomponent.GetComponentProperty()
-            model = componentProperty.GetModel()
+            model = componentProperty.GetModel().Clone()
             pinpairs = model.PinPairs
             for pinpair in pinpairs:
                 pair = model.GetPinPairRlc(pinpair)
@@ -2690,7 +2668,7 @@ class EDBComponent(object):
         cmp_type = int(self.edbcomponent.GetComponentType())
         if 0 < cmp_type < 4:
             componentProperty = self.edbcomponent.GetComponentProperty()
-            model = componentProperty.GetModel()
+            model = componentProperty.GetModel().Clone()
             pinpairs = model.PinPairs
             for pinpair in pinpairs:
                 pair = model.GetPinPairRlc(pinpair)
@@ -2709,7 +2687,7 @@ class EDBComponent(object):
         cmp_type = int(self.edbcomponent.GetComponentType())
         if 0 < cmp_type < 4:
             componentProperty = self.edbcomponent.GetComponentProperty()
-            model = componentProperty.GetModel()
+            model = componentProperty.GetModel().Clone()
             pinpairs = model.PinPairs
             for pinpair in pinpairs:
                 pair = model.GetPinPairRlc(pinpair)
@@ -2879,7 +2857,7 @@ class EDBComponent(object):
         str
            Name of the placement layer.
         """
-        return self.edbcomponent.GetPlacementLayer().GetName()
+        return self.edbcomponent.GetPlacementLayer().Clone().GetName()
 
     @property
     def lower_elevation(self):
@@ -2890,7 +2868,7 @@ class EDBComponent(object):
         float
             Lower elevation of the placement layer.
         """
-        return self.edbcomponent.GetPlacementLayer().GetLowerElevation()
+        return self.edbcomponent.GetPlacementLayer().Clone().GetLowerElevation()
 
     @property
     def upper_elevation(self):
@@ -2902,7 +2880,7 @@ class EDBComponent(object):
             Upper elevation of the placement layer.
 
         """
-        return self.edbcomponent.GetPlacementLayer().GetUpperElevation()
+        return self.edbcomponent.GetPlacementLayer().Clone().GetUpperElevation()
 
     @property
     def top_bottom_association(self):
@@ -2930,6 +2908,183 @@ class EdbBuilder(object):
         self.EdbHandler.dB = db
         self.EdbHandler.cell = cell
         self.EdbHandler.layout = cell.GetLayout()
+
+
+class Node(object):
+    """Provides for handling nodes for Siwave sources."""
+
+    def __init__(self):
+        self._component = None
+        self._net = None
+        self._node_type = NodeType.Positive
+        self._name = ""
+
+    @property
+    def component(self):  # pragma: no cover
+        """Component name containing the node."""
+        return self._component
+
+    @component.setter
+    def component(self, value):  # pragma: no cover
+        if isinstance(value, str):
+            self._component = value
+
+    @property
+    def net(self):  # pragma: no cover
+        """Net of the node."""
+        return self._net
+
+    @net.setter
+    def net(self, value):  # pragma: no cover
+        if isinstance(value, str):
+            self._net = value
+
+    @property
+    def node_type(self):  # pragma: no cover
+        """Type of the node."""
+        return self._node_type
+
+    @node_type.setter
+    def node_type(self, value):  # pragma: no cover
+        if isinstance(value, int):
+            self._node_type = value
+
+    @property
+    def name(self):  # pragma: no cover
+        """Name of the node."""
+        return self._name
+
+    @name.setter
+    def name(self, value):  # pragma: no cover
+        if isinstance(value, str):
+            self._name = value
+
+    def _json_format(self):  # pragma: no cover
+        dict_out = {}
+        for k, v in self.__dict__.items():
+            dict_out[k[1:]] = v
+        return dict_out
+
+    def _read_json(self, node_dict):  # pragma: no cover
+        for k, v in node_dict.items():
+            self.__setattr__(k, v)
+
+
+class Source(object):
+    """Provides for handling Siwave sources."""
+
+    def __init__(self):
+        self._name = ""
+        self._source_type = SourceType.Vsource
+        self._positive_node = Node()
+        self._negative_node = Node()
+        self._amplitude = 1.0
+        self._phase = 0.0
+        self._impedance_value = 1.0
+        self._config_init()
+
+    def _config_init(self):
+        self._positive_node.node_type = int(NodeType.Positive)
+        self._positive_node.name = "pos_term"
+        self._negative_node.node_type = int(NodeType.Negative)
+        self._negative_node.name = "neg_term"
+
+    @property
+    def name(self):  # pragma: no cover
+        """Source name."""
+        return self._name
+
+    @name.setter
+    def name(self, value):  # pragma: no cover
+        if isinstance(value, str):
+            self._name = value
+
+    @property
+    def source_type(self):  # pragma: no cover
+        """Source type."""
+        return self._source_type
+
+    @source_type.setter
+    def source_type(self, value):  # pragma: no cover
+        if isinstance(value, int):
+            self._source_type = value
+            if value == 3:
+                self._impedance_value = 1e-6
+            if value == 4:
+                self._impedance_value = 5e7
+            if value == 5:
+                self._impedance_value = 1.0
+
+    @property
+    def positive_node(self):  # pragma: no cover
+        """Positive node of the source."""
+        return self._positive_node
+
+    @positive_node.setter
+    def positive_node(self, value):  # pragma: no cover
+        if isinstance(value, Node):
+            self._positive_node = value
+
+    @property
+    def negative_node(self):  # pragma: no cover
+        """Negative node of the source."""
+        return self._negative_node
+
+    @negative_node.setter
+    def negative_node(self, value):  # pragma: no cover
+        if isinstance(value, Node):
+            self._negative_node = value
+            #
+
+    @property
+    def amplitude(self):  # pragma: no cover
+        """Amplitude value of the source. Either amperes for current source or volts for
+        voltage source."""
+        return self._amplitude
+
+    @amplitude.setter
+    def amplitude(self, value):  # pragma: no cover
+        if isinstance(value, float):
+            self._amplitude = value
+
+    @property
+    def phase(self):  # pragma: no cover
+        """Phase of the source."""
+        return self._phase
+
+    @phase.setter
+    def phase(self, value):  # pragma: no cover
+        if isinstance(value, float):
+            self._phase = value
+
+    @property
+    def impedance_value(self):  # pragma: no cover
+        """Impedance values of the source."""
+        return self._impedance_value
+
+    @impedance_value.setter
+    def impedance_value(self, value):  # pragma: no cover
+        if isinstance(value, float):
+            self._impedance_value = value
+
+    def _json_format(self):  # pragma: no cover
+        dict_out = {}
+        for k, v in self.__dict__.items():
+            if k == "_positive_node" or k == "_negative_node":
+                nodes = v._json_format()
+                dict_out[k[1:]] = nodes
+            else:
+                dict_out[k[1:]] = v
+        return dict_out
+
+    def _read_json(self, source_dict):  # pragma: no cover
+        for k, v in source_dict.items():
+            if k == "positive_node":
+                self.positive_node._read_json(v)
+            elif k == "negative_node":
+                self.negative_node._read_json(v)
+            else:
+                self.__setattr__(k, v)
 
 
 class SimulationConfiguration(object):
@@ -3058,6 +3213,7 @@ class SimulationConfiguration(object):
         self._do_cutout_subdesign = True
         self._solver_type = SolverType.Hfss3dLayout
         self._output_aedb = None
+        self._sources = []
         self._read_cfg()
 
     @property
@@ -3233,7 +3389,7 @@ class SimulationConfiguration(object):
 
     @cutout_subdesign_type.setter
     def cutout_subdesign_type(self, value):  # pragma: no cover
-        if isinstance(value, CutoutSubdesignType):
+        if validate_enum_class_value(CutoutSubdesignType, value):
             self._cutout_subdesign_type = value
 
     @property
@@ -3437,8 +3593,8 @@ class SimulationConfiguration(object):
         return self._radiation_box
 
     @radiation_box.setter
-    def radiation_box(self, value):  # pragma: no cover
-        if isinstance(value, RadiationBoxType):
+    def radiation_box(self, value):
+        if validate_enum_class_value(RadiationBoxType, value):
             self._radiation_box = value
 
     @property
@@ -3486,10 +3642,8 @@ class SimulationConfiguration(object):
 
     @sweep_type.setter
     def sweep_type(self, value):  # pragma: no cover
-        if isinstance(value, SweepType):
+        if validate_enum_class_value(SweepType, value):
             self._sweep_type = value
-        # if isinstance(value, str):
-        #     self._sweep_type = value
 
     @property
     def step_freq(self):  # pragma: no cover
@@ -3600,7 +3754,7 @@ class SimulationConfiguration(object):
 
     @basis_order.setter
     def basis_order(self, value):  # pragma: no cover
-        if isinstance(value, BasisOrder):
+        if validate_enum_class_value(BasisOrder, value):
             self._basis_order = value
 
     @property
@@ -4155,6 +4309,22 @@ class SimulationConfiguration(object):
         if isinstance(value, str):
             self._output_aedb = value
 
+    @property
+    def sources(self):  # pragma: no cover
+        return self._sources
+
+    @sources.setter
+    def sources(self, value):  # pragma: no cover
+        if isinstance(value, Source):
+            value = [value]
+        if isinstance(value, list):
+            if len([src for src in value if isinstance(src, Source)]) == len(value):
+                self._sources = value
+
+    def add_source(self, source=None):  # pragma: no cover
+        if isinstance(source, Source):
+            self._sources.append(source)
+
     def _get_bool_value(self, value):  # pragma: no cover
         val = value.lower()
         if val in ("y", "yes", "t", "true", "on", "1"):
@@ -4302,7 +4472,7 @@ class SimulationConfiguration(object):
                                 elif value.lower().startswith("zero"):
                                     self.basis_order = BasisOrder.Zero
                                 elif value.lower().startswith("first"):  # single
-                                    self.basis_order = BasisOrder.single
+                                    self.basis_order = BasisOrder.Single
                                 elif value.lower().startswith("second"):  # double
                                     self.basis_order = BasisOrder.Double
                                 else:
@@ -4372,8 +4542,10 @@ class SimulationConfiguration(object):
                                     self.solver_type = 0
                                 if value.lower() == "hfss3dlayout":
                                     self.solver_type = 6
-                                elif value.lower().startswith("siwave"):
-                                    self.solver_type = 1
+                                elif value.lower().startswith("siwavesyz"):
+                                    self.solver_type = 6
+                                elif value.lower().startswith("siwavedc"):
+                                    self.solver_type = 8
                                 elif value.lower().startswith("q3d"):
                                     self.solver_type = 2
                                 elif value.lower().startswith("nexxim"):
@@ -4415,7 +4587,11 @@ class SimulationConfiguration(object):
         dict_out = {}
         for k, v in self.__dict__.items():
             if k[0] == "_":
-                dict_out[k[1:]] = v
+                if k == "_sources":
+                    sources_out = [src._json_format() for src in v]
+                    dict_out[k[1:]] = sources_out
+                else:
+                    dict_out[k[1:]] = v
             else:
                 dict_out[k] = v
         if output_file:
@@ -4446,10 +4622,274 @@ class SimulationConfiguration(object):
         """
         if input_file:
             f = open(input_file)
-            json_dict = json.load(f)
+            json_dict = json.load(f)  # pragma: no cover
             for k, v in json_dict.items():
+                if k == "sources":
+                    for src in json_dict[k]:  # pragma: no cover
+                        source = Source()
+                        source._read_json(src)
+                        self.sources.append(source)
                 self.__setattr__(k, v)
             self.filename = input_file
             return True
         else:
             return False
+
+    def add_dc_source(
+        self,
+        source_type=SourceType.Vsource,
+        name="",
+        amplitude=1.0,
+        phase=0.0,
+        impedance=1.0,
+        positive_node_component="",
+        positive_node_net="",
+        negative_node_component="",
+        negative_node_net="",
+    ):
+        """Add a source for the current SimulationConfiguration instance.
+
+        Parameters
+        ----------
+        source_type : SourceType
+            Source type that is defined.
+
+        name : str
+            Source name.
+
+        amplitude : float
+            Amplitude value of the source. Either amperes for current source or volts for
+            voltage source.
+
+        phase : float
+            Phase value of the source.
+
+        impedance : float
+            Impedance value of the source.
+
+        positive_node_component : str
+            Name of the component used for the positive node.
+
+        negative_node_component : str
+            Name of the component used for the negative node.
+
+        positive_node_net : str
+            Net used for the positive node.
+
+        negative_node_net : str
+            Net used for the negative node.
+
+        Returns
+        -------
+        bool
+            ``True`` when successful, ``False`` when a file name is not provided.
+
+        Examples
+        --------
+        >>> edb = Edb(target_file)
+        >>> sim_setup = SimulationConfiguration()
+        >>> sim_setup.solver_type = SolverType.SiwaveDC
+        >>> sim_setup.add_dc_source(source_type=SourceType.Vsource, positive_node_component="V1",
+        >>> positive_node_net="HSG", negative_node_component="V1", negative_node_net="SW")
+
+        """
+        if not isinstance(source_type, int):  # pragma: no cover
+            return False
+        if name == "":  # pragma: no cover
+            if isinstance(source_type, int):
+                if source_type == 3:
+                    name = generate_unique_name("v_source")
+                elif source_type == 4:
+                    name = generate_unique_name("I_source")
+                elif source_type == 5:
+                    name = generate_unique_name("R")
+        if not isinstance(amplitude, float):  # pragma: no cover
+            return False
+        if not isinstance(phase, float):  # pragma: no cover
+            return False
+        if not isinstance(positive_node_component, str):  # pragma: no cover
+            return False
+        if not isinstance(positive_node_net, str):  # pragma: no cover
+            return False
+        if not isinstance(negative_node_component, str):  # pragma: no cover
+            return False
+        if not isinstance(negative_node_net, str):  # pragma: no cover
+            return False
+        if not isinstance(impedance, float):  # pragma: no cover
+            return False
+        source = Source()
+        if source_type == 3:  # pragma: no cover
+            source.source_type = SourceType.Vsource
+        elif source_type == 4:  # pragma: no cover
+            source.source_type = SourceType.Isource
+        elif source_type == 5:  # pragma: no cover
+            source.source_type = SourceType.Resistor
+        source.name = name
+        source.amplitude = amplitude
+        source.phase = phase
+        source.positive_node.component = positive_node_component
+        source.positive_node.net = positive_node_net
+        source.negative_node.component = negative_node_component
+        source.negative_node.net = negative_node_net
+        source.impedance_value = impedance
+        try:  # pragma: no cover
+            self.sources.append(source)
+            return True
+        except:  # pragma: no cover
+            return False
+
+
+class EDBStatistics(object):
+    """Statistics object
+
+    Object properties example.
+    >>> stat_model = EDBStatistics()
+    >>> stat_model.num_capacitors
+    >>> stat_model.num_resistors
+    >>> stat_model.num_inductors
+    >>> stat_model.layout_size
+    >>> stat_model.num_discrete_components
+    >>> stat_model.num_inductors
+    >>> stat_model.num_resistors
+    >>> stat_model.num_capacitors
+    >>> stat_model.num_nets
+    >>> stat_model.num_traces
+    >>> stat_model.num_polygons
+    >>> stat_model.num_vias
+    >>> stat_model.stackup_thickness
+    >>> stat_model.occupying_surface
+    >>> stat_model.occupying_ratio
+    """
+
+    def __init__(self):
+        self._nb_layer = 0
+        self._stackup_thickness = 0.0
+        self._nb_vias = 0
+        self._occupying_ratio = 0.0
+        self._occupying_surface = 0.0
+        self._layout_size = [0.0, 0.0, 0.0, 0.0]
+        self._nb_polygons = 0
+        self._nb_traces = 0
+        self._nb_nets = 0
+        self._nb_discrete_components = 0
+        self._nb_inductors = 0
+        self._nb_capacitors = 0
+        self._nb_resistors = 0
+
+    @property
+    def num_layers(self):
+        return self._nb_layer
+
+    @num_layers.setter
+    def num_layers(self, value):
+        if isinstance(value, int):
+            self._nb_layer = value
+
+    @property
+    def stackup_thickness(self):
+        return self._stackup_thickness
+
+    @stackup_thickness.setter
+    def stackup_thickness(self, value):
+        if isinstance(value, float):
+            self._stackup_thickness = value
+
+    @property
+    def num_vias(self):
+        return self._nb_vias
+
+    @num_vias.setter
+    def num_vias(self, value):
+        if isinstance(value, int):
+            self._nb_vias = value
+
+    @property
+    def occupying_ratio(self):
+        return self._occupying_ratio
+
+    @occupying_ratio.setter
+    def occupying_ratio(self, value):
+        if isinstance(value, float):
+            self._occupying_ratio = value
+
+    @property
+    def occupying_surface(self):
+        return self._occupying_surface
+
+    @occupying_surface.setter
+    def occupying_surface(self, value):
+        if isinstance(value, float):
+            self._occupying_surface = value
+
+    @property
+    def layout_size(self):
+        return self._layout_size
+
+    @layout_size.setter
+    def layout_size(self, value):
+        if isinstance(value, list):
+            if len([pt for pt in value if isinstance(pt, float)]) == len(value):
+                self._layout_size = value
+
+    @property
+    def num_polygons(self):
+        return self._nb_polygons
+
+    @num_polygons.setter
+    def num_polygons(self, value):
+        if isinstance(value, int):
+            self._nb_polygons = value
+
+    @property
+    def num_traces(self):
+        return self._nb_traces
+
+    @num_traces.setter
+    def num_traces(self, value):
+        if isinstance(value, int):
+            self._nb_traces = value
+
+    @property
+    def num_nets(self):
+        return self._nb_nets
+
+    @num_nets.setter
+    def num_nets(self, value):
+        if isinstance(value, int):
+            self._nb_nets = value
+
+    @property
+    def num_discrete_components(self):
+        return self._nb_discrete_components
+
+    @num_discrete_components.setter
+    def num_discrete_components(self, value):
+        if isinstance(value, int):
+            self._nb_discrete_components = value
+
+    @property
+    def num_inductors(self):
+        return self._nb_inductors
+
+    @num_inductors.setter
+    def num_inductors(self, value):
+        if isinstance(value, int):
+            self._nb_inductors = value
+
+    @property
+    def num_capacitors(self):
+        return self._nb_capacitors
+
+    @num_capacitors.setter
+    def num_capacitors(self, value):
+        if isinstance(value, int):
+            self._nb_capacitors = value
+
+    @property
+    def num_resistors(self):
+        return self._nb_resistors
+
+    @num_resistors.setter
+    def num_resistors(self, value):
+        if isinstance(value, int):
+            self._nb_resistors = value

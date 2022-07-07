@@ -67,6 +67,8 @@ class TestClass(BasisTest, object):
         bounds = self.aedtapp.assign_vector_potential(edge_object.id, 3)
         assert bounds
         assert bounds.props["Value"] == "3"
+        bounds["Value"] = "2"
+        assert bounds.props["Value"] == "2"
         line = self.aedtapp.modeler.create_polyline([[0, 0, 0], [1, 0, 1]], name="myline")
         bound2 = self.aedtapp.assign_vector_potential(line.id, 2)
         assert bound2
@@ -261,3 +263,21 @@ class TestClass(BasisTest, object):
 
     def test_21_symmetry_multiplier(self):
         assert self.aedtapp.change_symmetry_multiplier(2)
+
+    def test_22_eddycurrent(self):
+        self.aedtapp.set_active_design("Basis_Model_For_Test")
+        assert self.aedtapp.eddy_effects_on(["Coil_1"], activate_eddy_effects=True)
+        oModule = self.aedtapp.odesign.GetModule("BoundarySetup")
+        assert oModule.GetEddyEffect("Coil_1")
+        self.aedtapp.eddy_effects_on(["Coil_1"], activate_eddy_effects=False)
+        assert not oModule.GetEddyEffect("Coil_1")
+
+    def test_23_read_motion_boundary(self):
+        assert self.aedtapp.boundaries
+        for bound in self.aedtapp.boundaries:
+            if bound.name == "MotionSetup1":
+                assert bound.props["MotionType"] == "Band"
+                assert bound.props["InitPos"] == "Init_Pos"
+                bound.props["InitPos"] = "10deg"
+                assert bound.props["InitPos"] == "10deg"
+                assert bound.type == "Band"

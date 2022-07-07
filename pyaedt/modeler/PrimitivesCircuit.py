@@ -290,13 +290,15 @@ class CircuitComponents(object):
         return self.components[id]
 
     @pyaedt_function_handler()
-    def create_gnd(self, location=[]):
+    def create_gnd(self, location=[], angle=0):
         """Create a ground.
 
         Parameters
         ----------
         location : list, optional
             Position on the X and Y axis. The default is ``None``.
+        angle : optional
+            Angle rotation in degrees. The default is ``0``.
 
         Returns
         -------
@@ -313,7 +315,7 @@ class CircuitComponents(object):
 
         name = self.oeditor.CreateGround(
             ["NAME:GroundProps", "Id:=", id],
-            ["NAME:Attributes", "Page:=", 1, "X:=", xpos, "Y:=", ypos, "Angle:=", 0, "Flip:=", False],
+            ["NAME:Attributes", "Page:=", 1, "X:=", xpos, "Y:=", ypos, "Angle:=", angle, "Flip:=", False],
         )
         id = int(name.split(";")[1])
         self.add_id_to_component(id)
@@ -1109,6 +1111,32 @@ class CircuitComponents(object):
             val = "{0}{1}".format(Value, sUnits)
 
         return val
+
+    @pyaedt_function_handler()
+    def create_line(self, points_array, color=0, line_width=0):
+        """Draw a graphical line.
+
+        Parameters
+        ----------
+        points_array : list
+            A nested list of point coordinates. For example,
+            ``[[x1, y1], [x2, y2], ...]``.
+        color : string or 3 item list, optional
+            Color or the line. The default is ``0``.
+        line_width : float, optional
+            Width of the line. The default is ``0``.
+        Returns
+        -------
+
+        >>> oEditor.CreateLine
+        """
+
+        pointlist = [str(tuple(i)) for i in points_array]
+        id = self.create_unique_id()
+        return self.oeditor.CreateLine(
+            ["NAME:LineData", "Points:=", pointlist, "LineWidth:=", line_width, "Color:=", color, "Id:=", id],
+            ["NAME:Attributes", "Page:=", 1],
+        )
 
 
 class ComponentInfo(object):

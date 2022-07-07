@@ -120,7 +120,7 @@ class FieldAnalysis3D(Analysis, object):
 
         Returns
         -------
-        :class:`pyaedt.modeler.Model3D.Modeler3D`
+        :class:`pyaedt.modeler.Model3D.Modeler3D` or :class:`pyaedt.modeler.Model2D.Modeler2D`
         """
         return self._modeler
 
@@ -586,22 +586,59 @@ class FieldAnalysis3D(Analysis, object):
         >>> obj_names_list = [box1.name, box2.name, cylinder1.name, cylinder2.name]
         >>> hfss.assign_material(obj_names_list, "aluminum")
         """
+        matobj = None
         selections = self.modeler.convert_to_selections(obj, True)
 
-        if mat.lower() not in self.materials.material_keys:
-            matobj = self.materials._aedmattolibrary(mat)
-        else:
+        if mat.lower() in self.materials.material_keys:
             matobj = self.materials.material_keys[mat.lower()]
-
+        elif self.materials._get_aedt_case_name(mat):
+            matobj = self.materials._aedmattolibrary(mat)
         if matobj:
-            self.logger.info("Assign Material " + mat + " to object " + str(selections))
-            for el in selections:
-                self.modeler[el].material_name = matobj.name
-                self.modeler[el].color = matobj.material_appearance
-                if matobj.is_dielectric():
-                    self.modeler[el].solve_inside = True
-                else:
-                    self.modeler[el].solve_inside = False
+            if self.design_type == "HFSS":
+                solve_inside = matobj.is_dielectric()
+            else:
+                solve_inside = True
+            slice_sel = min(50, len(selections))
+            num_objects = len(selections)
+            remaining = num_objects
+            while remaining >= 1:
+                objs = selections[:slice_sel]
+                szSelections = self.modeler.convert_to_selections(objs)
+                vArg1 = [
+                    "NAME:Selections",
+                    "AllowRegionDependentPartSelectionForPMLCreation:=",
+                    True,
+                    "AllowRegionSelectionForPMLCreation:=",
+                    True,
+                    "Selections:=",
+                    szSelections,
+                ]
+                vArg2 = [
+                    "NAME:Attributes",
+                    "MaterialValue:=",
+                    '"{}"'.format(matobj.name),
+                    "SolveInside:=",
+                    solve_inside,
+                    "ShellElement:=",
+                    False,
+                    "ShellElementThickness:=",
+                    "nan ",
+                    "IsMaterialEditable:=",
+                    True,
+                    "UseMaterialAppearance:=",
+                    True,
+                    "IsLightweight:=",
+                    False,
+                ]
+                self.oeditor.AssignMaterial(vArg1, vArg2)
+                for el in objs:
+                    self.modeler[el]._material_name = matobj.name
+                    self.modeler[el]._color = matobj.material_appearance
+                    self.modeler[el]._solve_inside = solve_inside
+                remaining -= slice_sel
+                if remaining > 0:
+                    selections = selections[slice_sel:]
+
             return True
         else:
             self.logger.error("Material does not exist.")

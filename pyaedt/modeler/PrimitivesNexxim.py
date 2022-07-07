@@ -82,7 +82,7 @@ class NexximComponents(CircuitComponents):
         return self._components_catalog
 
     @pyaedt_function_handler()
-    def create_subcircuit(self, location=None, angle=0, name=None, nested_subcircuit_id=None):
+    def create_subcircuit(self, location=None, angle=None, name=None, nested_subcircuit_id=None):
         """Add a new Circuit subcircuit to the design.
 
         Parameters
@@ -90,7 +90,7 @@ class NexximComponents(CircuitComponents):
         location : list of float, optional
             Position on the X axis and Y axis.
         angle : float, optional
-            Angle rotation in degrees. The default is ``0``.
+            Angle rotation in degrees. The default is ``None``.
         name : str, optional
             Name of the design. The default is ``None``, in which case
             a unique name is generated.
@@ -710,6 +710,49 @@ class NexximComponents(CircuitComponents):
         )
 
         cmpid.set_property("DC", value)
+        return cmpid
+
+    @pyaedt_function_handler()
+    def create_voltage_probe(self, probe_name=None, location=None, angle=0, use_instance_id_netlist=False):
+        """Create a voltage probe.
+
+        Parameters
+        ----------
+        probe_name :
+            Name of the voltage probe. The default is ``None``.
+        location : list of float, optional
+            Position on the X axis and Y axis. The default is ``None``.
+        angle : float, optional
+            Angle rotation in degrees. The default is ``0``.
+        use_instance_id_netlist : bool, optional
+            Whether to use the instance ID in the net list.
+            The default is ``False``.
+
+        Returns
+        -------
+        :class:`pyaedt.modeler.Object3d.CircuitComponent`
+            Circuit Component Object.
+
+        References
+        ----------
+
+        >>> oEditor.CreateComponent
+        """
+        if location is None:
+            location = []
+        else:
+            location = [location[0] + 0.2 * 24.4 / 1000, location[1] + 0.2 * 24.4 / 1000]
+
+        cmpid = self.create_component(
+            None,
+            component_library="Probes",
+            component_name="VPROBE",
+            location=location,
+            angle=angle,
+            use_instance_id_netlist=use_instance_id_netlist,
+        )
+
+        cmpid.set_property("Name", probe_name)
         return cmpid
 
     @pyaedt_function_handler()

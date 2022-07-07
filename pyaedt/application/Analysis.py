@@ -111,7 +111,6 @@ class Analysis(Design, object):
         self._setup = None
         if setup_name:
             self.analysis_setup = setup_name
-        self.solution_type = solution_type
         self._materials = Materials(self)
         self.logger.info("Materials Loaded")
         self._available_variations = self.AvailableVariations(self)
@@ -970,7 +969,7 @@ class Analysis(Design, object):
 
         @property
         def nominal_w_values_dict(self):
-            """Nominal with values in a dictionary.
+            """Nominal independent with values in a dictionary.
 
             References
             ----------
@@ -981,6 +980,23 @@ class Analysis(Design, object):
             >>> oDesign.GetNominalVariation"""
             families = {}
             for k, v in list(self._app.variable_manager.independent_variables.items()):
+                families[k] = v.expression
+
+            return families
+
+        @property
+        def nominal_w_values_dict_w_dependent(self):
+            """Nominal  with values in a dictionary.
+
+            References
+            ----------
+
+            >>> oDesign.GetChildObject('Variables').GetChildNames
+            >>> oDesign.GetVariables
+            >>> oDesign.GetVariableValue
+            >>> oDesign.GetNominalVariation"""
+            families = {}
+            for k, v in list(self._app.variable_manager.variables.items()):
                 families[k] = v.expression
 
             return families

@@ -181,6 +181,24 @@ def scale_units(scale_to_unit):
     return sunit
 
 
+def validate_enum_class_value(cls, value):
+    """Check whether the value for the class ``enumeration-class`` is valid.
+
+    Parameters
+    ----------
+    cls : class
+        Enumeration-style class with integer members in range(0, N) where cls.Invalid equals N-1.
+    value : int
+        Value to check.
+
+    Returns
+    -------
+    bool
+        ``True`` when the value is valid for the ``enumeration-class``, ``False`` otherwise.
+    """
+    return isinstance(value, int) and value >= 0 and value < cls.Invalid
+
+
 AEDT_UNITS = {
     "AngularSpeed": {
         "deg_per_hr": HOUR2SEC * DEG2RAD,
@@ -194,6 +212,8 @@ AEDT_UNITS = {
         "rpm": SEC2MIN * V2PI,
     },
     "Angle": {"deg": DEG2RAD, "rad": 1.0, "degmin": DEG2RAD * SEC2MIN, "degsec": DEG2RAD * SEC2HOUR},
+    "Capacitance": {"fF": 1e-15, "pF": 1e-12, "nF": 1e-9, "uF": 1e-6, "mF": 1e-3, "F": 1.0},
+    "Conductance": {"fSie": 1e-15, "pSie": 1e-12, "nSie": 1e-9, "uSie": 1e-6, "mSie": 1e-3, "Sie": 1.0},
     "Current": {
         "fA": 1e-15,
         "pA": 1e-12,
@@ -336,11 +356,22 @@ AEDT_UNITS = {
         "kA_per_m": 1e3,
         "megA_per_m": 1e6,
         "gA_per_m": 1e9,
+        "fA_per_meter": 1e-15,
+        "pA_per_meter": 1e-12,
+        "nA_per_meter": 1e-9,
+        "uA_per_meter": 1e-6,
+        "mA_per_meter": 1e-3,
+        "A_per_meter": 1.0,
+        "kA_per_meter": 1e3,
+        "megA_per_meter": 1e6,
+        "gA_per_meter": 1e9,
     },
 }
 SI_UNITS = {
     "AngularSpeed": "rad_per_sec",
     "Angle": "rad",
+    "Capacitance": "F",
+    "Conductance": "Sie",
     "Current": "A",
     "Flux": "vs",
     "Force": "newton",
@@ -350,13 +381,14 @@ SI_UNITS = {
     "Mass": "kg",
     "None": "",
     "Resistance": "ohm",
+    "Speed": "m_per_sec",
     "Time": "s",
     "Torque": "NewtonMeter",
     "Voltage": "V",
     "Temperature": "kel",
     "Power": "W",
     "B-field": "tesla",
-    "H-field": "A_per_m",
+    "H-field": "A_per_meter",
 }
 UNIT_SYSTEM_OPERATIONS = {
     # Multiplication of physical domains
@@ -510,23 +542,36 @@ class FlipChipOrientation(object):
 class SolverType(object):
     """Provides solver type classes."""
 
-    (Hfss, Siwave, Q3D, Maxwell, Nexxim, TwinBuilder, Hfss3dLayout) = range(0, 7)
+    (Hfss, Siwave, Q3D, Maxwell, Nexxim, TwinBuilder, Hfss3dLayout, SiwaveSYZ, SiwaveDC) = range(0, 9)
 
 
 class CutoutSubdesignType(object):
-    (Conformal, BoundingBox) = range(0, 2)
+    (Conformal, BoundingBox, Invalid) = range(0, 3)
 
 
 class RadiationBoxType(object):
-    (Conformal, BoundingBox, ConvexHull) = range(0, 3)
+    (Conformal, BoundingBox, ConvexHull, Invalid) = range(0, 4)
 
 
 class SweepType(object):
-    (Linear, LogCount) = range(0, 2)
+    (Linear, LogCount, Invalid) = range(0, 3)
 
 
 class BasisOrder(object):
-    (Mixed, Zero, single, Double) = range(0, 4)
+    """Enumeration-class for HFSS basis order settings.
+
+
+    Warning: the value ``single`` has been renamed to ``Single`` for consistency. Please update references to
+    ``single``.
+    """
+
+    (Mixed, Zero, Single, Double, Invalid) = range(0, 5)
+
+
+class NodeType(object):
+    """Type of node for source creation."""
+
+    (Positive, Negative, Floating) = range(0, 3)
 
 
 class SourceType(object):

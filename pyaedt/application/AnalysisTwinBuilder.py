@@ -73,7 +73,6 @@ class AnalysisTwinBuilder(Analysis):
             port,
             aedt_process_id,
         )
-        self.solution_type = solution_type
         self._modeler = ModelerTwinBuilder(self)
         self._post = CircuitPostProcessor(self)
 
@@ -122,7 +121,7 @@ class AnalysisTwinBuilder(Analysis):
         if props:
             for el in props:
                 setup.props[el] = props[el]
-        setup.update()
+            setup.update()
         self.analysis_setup = name
         self.setups.append(setup)
         return setup
