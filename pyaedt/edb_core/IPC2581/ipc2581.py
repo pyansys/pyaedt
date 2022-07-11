@@ -16,4 +16,4 @@ class IPC2581(object):
             self._units = value
 
     class Units(object):
-        (Inch, MM) = range(1,2)
+        (Inch, MM) = range(1, 2)
