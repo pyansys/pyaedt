@@ -16,6 +16,7 @@ class Step(object):
         self._components = []
         self._logical_nets = LogicalNets()
         self._physical_nets = []
+        self._layer_features = []
 
     @property
     def name(self):
