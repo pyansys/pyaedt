@@ -22,3 +22,11 @@ class Path(object):
     def add_poly_step_to_polyline(self, poly_step=None):
         if isinstance(poly_step, PolyStep):
             self._polyline.append(poly_step)
+
+    def write_xml(self):
+        pass
+
+class PathStep(object):
+    def __init__(self):
+        self.x = 0.0
+        self.y = 0.0

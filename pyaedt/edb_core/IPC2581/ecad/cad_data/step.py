@@ -4,6 +4,7 @@ from pyaedt.edb_core.IPC2581.ecad.cad_data.package.package import Package
 from pyaedt.edb_core.IPC2581.ecad.cad_data.component.component import Component
 from pyaedt.edb_core.IPC2581.ecad.cad_data.logical_net.logical_net import LogicalNets
 from pyaedt.edb_core.IPC2581.ecad.cad_data.phy_net.phy_net import PhyNet
+from pyaedt.edb_core.IPC2581.ecad.cad_data.layer_feature.layer_feature import LayerFeature
 
 
 class Step(object):
@@ -76,24 +77,54 @@ class Step(object):
             self._logical_nets = value
 
     @property
+    def layer_features(self):
+        return self._layer_features
+
+    @layer_features.setter
+    def layer_features(self, value):
+        if isinstance(value, list):
+            if len([feat for feat in value if isinstance(feat, )]):
+                self._layer_features = value
+
+    @property
     def physical_nets(self):
         return self._physical_nets
+
+    @physical_nets.setter
+    def physical_nets(self, value):
+        if isinstance(value, list):
+            if len([phy_net for phy_net in value if isinstance(phy_net, PhyNet)]) == len(value):
+                self._physical_nets = value
 
     def add_physical_net(self, phy_net=None):
         if isinstance(phy_net, PhyNet):
             self._physical_nets.append(phy_net)
+            return True
+        return False
 
     def add_padstack_def(self, padstack_def=None):
         if isinstance(padstack_def, PadstackDef):
             self._padstack_defs.append(padstack_def)
+            return True
+        return False
 
     def add_package(self, package=None):
         if isinstance(package, Package):
             self._packages.append(package)
+            return True
+        return False
 
     def add_component(self, component=None):
         if isinstance(component, Component):
             self._components.append(component)
+            return True
+        return False
+
+    def add_layer_feature(self, layer_feature=None):
+        if isinstance(layer_feature, LayerFeature):
+            self._layer_features.append(layer_feature)
+            return True
+        return False
 
     def write_xml(self):
         pass

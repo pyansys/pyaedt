@@ -1,10 +1,12 @@
 from pyaedt.edb_core.IPC2581.content.content import Content
+from pyaedt.edb_core.IPC2581.ecad.ecad import Ecad
+
 
 class IPC2581(object):
     def __init__(self):
-        self._revision = "C"
+        self.revision = "C"
         self._units = self.Units().Inch
-        self._content = Content()
+        self.content = Content()
 
     @property
     def units(self):
