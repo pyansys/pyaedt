@@ -1670,3 +1670,14 @@ if not config["skip_edb"]:
             assert edb.core_hfss.configure_hfss_extents(config)
             final_extent_info = edb.active_cell.GetHFSSExtentInfo()
             assert final_extent_info.ExtentType == edb.edb.Utility.HFSSExtentInfoType.BoundingBox
+
+        def test_111_retain_stackup_mode(self):
+            source_path = os.path.join(local_path, "example_models", "chip.aedb")
+            target_path = os.path.join(self.local_scratch.path, "chip.aedb")
+            self.local_scratch.copyfolder(source_path, target_path)
+            edb = Edb(target_path)
+            layer_collection_mode = edb.active_layout.GetLayerCollection().GetMode()
+            assert layer_collection_mode == edb.edb.Cell.LayerCollectionMode.Overlapping
+            edb.core_stackup.signal_layers["M1"].roughness_enabled = True
+            layer_collection_mode = edb.active_layout.GetLayerCollection().GetMode()
+            assert layer_collection_mode == edb.edb.Cell.LayerCollectionMode.Overlapping
