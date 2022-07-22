@@ -1199,3 +1199,51 @@ class EdbHfss(object):
                         void.SetPolygonData(new_void_data)
 
         return True
+
+    @pyaedt_function_handler()
+    def create_rlc_boundary_on_pins(self, positive_pin=None, negative_pin=None, rvalue=0.0, lvalue=0.0, cvalue=0.0):
+        """Create hfss rlc boundary on pins.
+
+        Parameters
+        ----------
+        positive_pin : Positive pin.
+            Edb.Cell.Primitive.PadstackInstance
+
+        negative_pin : Negative pin.
+            Edb.Cell.Primitive.PadstackInstance
+
+        rvalue : Resistance value
+
+        lvalue : Inductance value
+
+        cvalue . Capacitance value.
+
+        Returns
+        -------
+        bool
+            ``True`` when successful, ``False`` when failed.
+
+        """
+
+        if positive_pin and negative_pin:
+            positive_pin_term = self._pedb.core_components._create_terminal(positive_pin)
+            negative_pin_term = self._pedb.core_components._create_terminal(negative_pin)
+            positive_pin_term.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.RlcBoundary)
+            negative_pin_term.SetBoundaryType(self._edb.Cell.Terminal.BoundaryType.RlcBoundary)
+            rlc = self._edb.Utility.Rlc()
+            rlc.IsParallel = True
+            rlc.REnabled = True
+            rlc.LEnabled = True
+            rlc.CEnabled = True
+            rlc.R = self._get_edb_value(rvalue)
+            rlc.L = self._get_edb_value(lvalue)
+            rlc.C = self._get_edb_value(cvalue)
+            positive_pin_term.SetRlcBoundaryParameters(rlc)
+            term_name = "{}_{}_{}".format(
+                positive_pin.GetComponent().GetName(), positive_pin.GetNet().GetName(), positive_pin.GetName()
+            )
+            positive_pin_term.SetName(term_name)
+            negative_pin_term.SetName("{}_ref".format(term_name))
+            positive_pin_term.SetReferenceTerminal(negative_pin_term)
+            return True
+        return False
